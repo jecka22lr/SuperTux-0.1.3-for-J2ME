@@ -5,7 +5,7 @@ A rewrite of SuperTux 0.1.3 for J2ME devices. 240p, landscape or portrait. Not m
 None known yet. Runs pretty solidly on emulators.
 
 # What changed between the original port and this?
-Brutal rewrite of all of the code
+Brutal rewrite of all of the code. Like, pretty much every line of code was adapted to Java... but the entire game is made to be as much of a 1:1 recreation as possible.
 
 # How to install?
 Lite JAR for 1MB limitations in OSes like Nokia S40, otherwise use the regular JAR. JAD available if needed.
