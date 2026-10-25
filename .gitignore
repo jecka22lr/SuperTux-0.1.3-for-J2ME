@@ -1,0 +1,16 @@
+# build output and generated data (rebuilt by build.sh and tools/convert.py)
+/build/
+/dist/
+/release/
+/res/
+tools/__pycache__/
+# emulator state
+/rms/
+/config/
+/freej2me_system/
+# never publish signing material or Symbian installers
+*.key
+*.cer
+*.rnd
+*.sis
+*.sisx
