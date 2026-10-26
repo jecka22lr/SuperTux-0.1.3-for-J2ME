@@ -314,7 +314,7 @@ final class Game extends GameCanvas implements Runnable {
     if (getClass().getResourceAsStream("/a16/0.wav") != null) {   // SFX format test build
       optionsMenu.insertAfter(M_SOUND, Menu.STRINGSELECT, "SFX type  ", M_SFXFMT);
       optionsMenu.setList(M_SFXFMT, Sound.FORMATS, sounds.format);
-      optionsMenu.insertAfter(M_SFXFMT, Menu.TOGGLE, "Pause music", M_PAUSEMUS);
+      optionsMenu.insertAfter(M_SFXFMT, Menu.TOGGLE, "Pause music during SFX", M_PAUSEMUS);
     }
     keysMenu.add(Menu.LABEL, "Key Setup", 0).add(Menu.HL, "", 0)
         .add(Menu.CONTROLFIELD, "Left move", M_KEYS).add(Menu.CONTROLFIELD, "Right move", M_KEYS + 1)
@@ -859,10 +859,33 @@ final class Game extends GameCanvas implements Runnable {
   };
   boolean helpOpen; int helpPage;
 
+  // the screens the help takes on this layout: an option's choices that don't fit under each other
+  // go on to a second screen (landscape is only 240 tall); each is { option, first choice, last + 1 }
+  int[][] helpScreens; int helpScreensFor = -1;
+  int[][] helpScreens() {
+    int key = sw * 1000 + sh;
+    if (helpScreens != null && helpScreensFor == key) return helpScreens;
+    Vector v = new Vector();
+    int per = sw / 8 - 2, top = landscape ? 0 : 20, bottom = sh - 26;
+    for (int p = 0; p < HELP.length; p++) {
+      int first = 1, y = top + 36;
+      for (int i = 1; i < HELP[p].length; i++) {
+        int h = 11 + wrap(HELP[p][i].substring(HELP[p][i].indexOf('|') + 1), per).length * 10;
+        if (y + h > bottom && i > first) { v.addElement(new int[] { p, first, i }); first = i; y = top + 36; }
+        y += h + 4;
+      }
+      v.addElement(new int[] { p, first, HELP[p].length });
+    }
+    helpScreens = new int[v.size()][];
+    v.copyInto(helpScreens);
+    helpScreensFor = key;
+    return helpScreens;
+  }
+
   void helpInput(int ev) {
     if ((ev & K_ESC) != 0) { helpOpen = false; return; }
     if ((ev & (K_LEFT | K_UP)) != 0) { if (helpPage > 0) helpPage--; return; }
-    if ((ev & (K_SELECT | K_RIGHT | K_DOWN | K_FIRE)) != 0 && ++helpPage >= HELP.length) helpOpen = false;
+    if ((ev & (K_SELECT | K_RIGHT | K_DOWN | K_FIRE)) != 0 && ++helpPage >= helpScreens().length) helpOpen = false;
   }
 
   // Potato and Max Potato: the editor help's black-to-white gradient instead of the darkened picture
@@ -878,17 +901,21 @@ final class Game extends GameCanvas implements Runnable {
   void drawHelp(Graphics g) {
     darkBackground(g, 0xc8000000);
     int top = landscape ? 0 : 20, per = sw / 8 - 2;
-    String[] p = HELP[helpPage];
-    Res.textCentered(g, Res.BLUE, "- " + p[0] + " -", sw / 2, top + 12, 2);
+    int[][] scr = helpScreens();
+    if (helpPage >= scr.length) helpPage = scr.length - 1;
+    int[] s = scr[helpPage];
+    String[] p = HELP[s[0]];
+    boolean more = (helpPage > 0 && scr[helpPage - 1][0] == s[0]) || (helpPage + 1 < scr.length && scr[helpPage + 1][0] == s[0]);
+    Res.textCentered(g, Res.BLUE, "- " + p[0] + (more && s[1] > 1 ? " (more)" : "") + " -", sw / 2, top + 12, 2);
     int y = top + 36;
-    for (int i = 1; i < p.length; i++) {
+    for (int i = s[1]; i < s[2]; i++) {
       int bar = p[i].indexOf('|');
       Res.text(g, Res.GOLD, p[i].substring(0, bar), 5, y, 1);
       String[] l = wrap(p[i].substring(bar + 1), per);
       for (int j = 0; j < l.length; j++) Res.text(g, Res.WHITE, l[j], 13, y + 11 + j * 10, 1);
-      y += 11 + l.length * 10 + (p.length > 6 ? 3 : 6);   // long pages close up a little
+      y += 11 + l.length * 10 + 4;
     }
-    Res.text(g, Res.WHITE, "Page " + (helpPage + 1) + "/" + HELP.length, 0, sh - 22, 1);
+    Res.text(g, Res.WHITE, "Page " + (helpPage + 1) + "/" + scr.length, 0, sh - 22, 1);
     if (showTouch) {
       Res.fillAlpha(g, sw - 48, 0, 48, 16, 0x508080b4);
       Res.textCentered(g, Res.WHITE, "CLOSE", sw - 24, 3, 1);

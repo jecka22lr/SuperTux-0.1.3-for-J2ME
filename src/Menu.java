@@ -350,10 +350,14 @@ final class Menu {
           // boxes land left of the text; placed the same way relative to the centre in portrait
           Res.drawSpriteTL(g, Spr.MENU_BACK, (160 + x - cx + tw / 2 + 8) / 2 - 160 + cx, (y - 8) / 2);
           break;
-        case TOGGLE:
-          text480(g, font, text[i], x, y, shadow);
-          Res.drawSpriteTL(g, toggled[i] ? Spr.CHECKBOX_CHECKED : Spr.CHECKBOX, (160 + x - cx + (tw + 8) / 2) / 2 - 160 + cx, (y - 8) / 2);
+        case TOGGLE: {
+          // the check box just left of the label (for the usual 10-letter labels this is exactly
+          // where the 320x240 build's halved x put it); a longer label moves right to make room
+          int tx = tw > 80 ? x + 9 : x;
+          text480(g, font, text[i], tx, y, shadow);
+          Res.drawSpriteTL(g, toggled[i] ? Spr.CHECKBOX_CHECKED : Spr.CHECKBOX, tx - tw / 2 - 18, (y - 8) / 2);
           break;
+        }
         default: text480(g, font, text[i], x, y, shadow);
       }
     }
