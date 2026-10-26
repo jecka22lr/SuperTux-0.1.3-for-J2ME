@@ -6,6 +6,10 @@ Sony Ericsson Cedar - Full speed, no known issues. Virtually perfect.
 
 Nokia E71 - Runs at full speed unless Sound is on due to some issues with 369MHz Symbian 9.2 phones. Triggering sound effects results in lag spikes.
 
+LG t375 - 9-10 FPS on Landscape, 12 FPS on Portrait, 15 FPS with only Sound or Music turned on with strange audio effects if only Music is on.
+
+J2ME Loader, Android: 33FPS, stable (Locked to 32FPS)
+
 # What changed between the original port and this?
 Brutal rewrite of all of the code. Like, pretty much every line of code was adapted to Java... but the entire game is made to be as much of a 1:1 recreation as possible.
 
