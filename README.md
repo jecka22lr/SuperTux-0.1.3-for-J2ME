@@ -22,3 +22,18 @@ This has not yet been tested on real firmware and as such I have no real expecta
 # Issues
 Lite version of this game has very shitty MIDIs for the soundtrack. I might automate something to make them chiptune versions of the soundtrack. If you wanna make some human-made stuff I would much prefer that!
 On Symbian S60 platform phones with 369MHz CPUs, there are annoying lag spikes for every time a sound effect is played. This is not yet mitigated by different sound effect options except for OFF. This is a known issue unfortunately and allegedly some commercial J2ME games shipped without SFX for these.
+
+# What's new in Beta Release 1.2
+Community levels made for 0.1.3 under Bonus Levels: Tux Strikes Back by Christian Schaefers (19 levels and its story) and four classic CT's Domain levels by CT. da'Bomb and UnNamed, from the SuperTux add-on collection.
+
+More options for slow phones:
+| Option | What it does |
+|---|---|
+| Detail: Low | Plain sky colour instead of the background picture, no snow or clouds |
+| Detail: Potato | Also: tiles drawn from a cached image (only newly scrolled columns get drawn), no tile, enemy, fireball or star animations, defeated enemies vanish, no flying scores, coins or brick pieces, no fades, menu slides or HUD text shadows |
+| Music: MIDI | No MP3 decoding |
+| Sound: Fast / MIDI / Nokia | Other ways of playing sound effects, for phones whose Java freezes when one starts |
+| FPS cap | Max, 25, 20 or 15. Fewer frames leaves the phone idle time, which can smooth out sound and music |
+| RAM saver | No level background pictures, and pictures a level doesn't need are freed before it loads |
+
+Adventure To The New World (ATTNW) by Miksy91 is supported by the converter, but it's not in the released jars since its music and many of its backgrounds come from other games. With the mod's files, `tools/convert.py` and `build.sh` build `SuperTux.jar` (everything) and `SuperTux-ATTNW.jar` (the mod alone) yourself.

@@ -3,6 +3,8 @@ import java.io.DataInputStream;
 import java.io.IOException;
 
 final class Level {
+  int changes;                         // interactive tiles changed (bricks, bonus blocks, coins)
+  int chMin = Integer.MAX_VALUE, chMax = -1;   // the columns changed since Game's tile cache looked
   static final int H = 15;
   String name, author;
   int width, startX, startY, time, background, music, bkgdSpeed, particles;
@@ -11,8 +13,8 @@ final class Level {
   int topColor, bottomColor;
   byte[] bg, ia, fg;
   // objects: kind, x, y, stay-on-platform
-  byte[] objKind, objStay; short[] objX, objY;
-  short[] resetX, resetY;
+  byte[] objKind, objStay; short[] objX, objY;    // objX and resetX are unsigned (& 0xffff):
+  short[] resetX, resetY;                          // levels can be up to 2047 tiles wide
 
   // a level by id ("a5", "u0_3"...): a copy saved on the phone (level editor) wins over the built-in one
   static Level load(String id) throws IOException {
@@ -73,11 +75,11 @@ final class Level {
     int no = in.readUnsignedShort();
     objKind = new byte[no]; objStay = new byte[no]; objX = new short[no]; objY = new short[no];
     for (int i = 0; i < no; i++) {
-      objKind[i] = in.readByte(); objX[i] = in.readShort(); objY[i] = in.readShort(); objStay[i] = in.readByte();
+      objKind[i] = in.readByte(); objX[i] = (short) in.readUnsignedShort(); objY[i] = in.readShort(); objStay[i] = in.readByte();
     }
     int nr = in.readUnsignedByte();
     resetX = new short[nr]; resetY = new short[nr];
-    for (int i = 0; i < nr; i++) { resetX[i] = in.readShort(); resetY[i] = in.readShort(); }
+    for (int i = 0; i < nr; i++) { resetX[i] = (short) in.readUnsignedShort(); resetY[i] = in.readShort(); }
     in.close();
   }
 
@@ -158,6 +160,9 @@ final class Level {
     if (tx < 0 || ty < 0) return;
     if (tx >= width || ty >= H) return;
     ia[ty * width + tx] = (byte) tile;
+    changes++;                         // tells Game's Potato tile cache to redraw those columns
+    if (tx < chMin) chMin = tx;
+    if (tx > chMax) chMax = tx;
   }
 
   // collision_object_map: any solid tile under the rectangle (1 pixel smaller)

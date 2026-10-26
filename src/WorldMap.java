@@ -312,8 +312,8 @@ final class WorldMap {
   }
 
   // slotinfo()
-  static String slotInfo(int slot) {
-    byte[] b = read("slot" + slot);
+  static String slotInfo(String prefix, int slot) {
+    byte[] b = read(prefix + slot);
     if (b == null) return "Slot " + slot + " - Free";
     try {
       DataInputStream in = new DataInputStream(new ByteArrayInputStream(b));

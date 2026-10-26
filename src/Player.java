@@ -326,6 +326,7 @@ final class Player extends Body {
       Res.drawSprite(g, gs, sx, sy, game.now);
     }
     if (invincibleT != 0 && (invincibleT - game.now > TUX_INVINCIBLE_TIME_WARNING || game.frameCounter % 3 != 0))
-      Res.drawSprite(g, size == SMALL || duck ? Spr.SMALLTUX_STAR : Spr.LARGETUX_STAR, sx, sy, game.now);
+      Res.drawSprite(g, size == SMALL || duck ? Spr.SMALLTUX_STAR : Spr.LARGETUX_STAR, sx, sy,
+          game.detail == Game.POTATO ? 0 : game.now);   // Potato: static stars
   }
 }

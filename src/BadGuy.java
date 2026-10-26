@@ -181,12 +181,15 @@ final class BadGuy extends Body {
       }
     }
     if (mode == STALACTITE_SHAKING) {
-      x = homeX + (rnd.nextInt() % 3);
+      // Potato: a small left/right step every 100 ms instead of a random jitter every frame
+      if (game.detail == Game.POTATO) x = homeX + (((game.frameCounter >> 2) & 1) == 0 ? -2 : 2);
+      else x = homeX + (rnd.nextInt() % 3);
       if (!timerRunning()) mode = STALACTITE_FALL;
     } else if (mode == STALACTITE_FALL) {
       fall();
       if (solid(x + w / 2, y + h)) {
         startTimer(2000); dying = DYING_SQUISHED; mode = FLAT;
+        if (game.detail == Game.POTATO) { removable = true; return; }   // no broken stalactite
         setSprite(Spr.STALACTITE_BROKEN, Spr.STALACTITE_BROKEN);
       }
     } else if (mode == FLAT) fall();
@@ -239,7 +242,8 @@ final class BadGuy extends Body {
     if (x <= game.scrollX - w || x >= game.scrollX + game.viewW) return;
     int s = dir == LEFT ? sprL : sprR;
     if (s < 0) return;
-    Res.drawSprite(g, s, (int) (x - game.scrollX) >> 1, ((int) y + game.viewTop) >> 1, game.now);
+    Res.drawSprite(g, s, (int) (x - game.scrollX) >> 1, ((int) y + game.viewTop) >> 1,
+        game.detail == Game.POTATO ? 0 : game.now);   // Potato: first frame only, enemies just slide
   }
 
   void bump() {
@@ -256,6 +260,7 @@ final class BadGuy extends Body {
     dying = DYING_SQUISHED;
     startTimer(2000);
     setVelocity(0, 0);
+    if (game.detail == Game.POTATO) removable = true;   // Potato: gone, no squished sprite
   }
 
   void squish(Player p) {
@@ -308,6 +313,7 @@ final class BadGuy extends Body {
     gravity = true;
     game.addScore(x - game.scrollX, y, score * game.scoreMultiplier);
     game.sound(Game.SND_FALL);
+    if (game.detail == Game.POTATO) removable = true;   // Potato: gone instead of falling off screen
   }
 
   void explode(BadGuy b) {

@@ -13,8 +13,8 @@ cat > build/MANIFEST.MF <<M
 MIDlet-1: SuperTux,/icon.png,SuperTux
 MIDlet-Name: SuperTux
 MIDlet-Vendor: SuperTux Devel Team, Jecka22LR
-MIDlet-Version: 1.1.0
-MIDlet-Description: SuperTux 0.1.3 J2ME - Beta Release 1.1
+MIDlet-Version: 1.2.0
+MIDlet-Description: SuperTux 0.1.3 J2ME - Beta Release 1.2
 MIDlet-Icon: /icon.png
 MicroEdition-Profile: MIDP-2.0
 MicroEdition-Configuration: CLDC-1.1
@@ -39,8 +39,32 @@ SIZE=$(stat -c %s dist/SuperTux.jar)
 { cat build/MANIFEST.MF; echo "MIDlet-Jar-URL: SuperTux.jar"; echo "MIDlet-Jar-Size: $SIZE"; } > dist/SuperTux.jad
 # lite build for old phones (1 MB JAR limit): MIDI music only
 mkdir -p build/lite && cd build/lite && unzip -q -o ../../dist/SuperTux.jar && rm -f m/*.mp3 && \
+  { [ ! -f ../../res-atnw-only.txt ] || xargs rm -f < ../../res-atnw-only.txt; } && \
+  mv x/g-lite.txt x/g.txt && rm -f x/g-atnw.txt && \
   $J/bin/jar cfm ../../dist/SuperTux-lite.jar META-INF/MANIFEST.MF $(ls | grep -v META-INF) 2>&1 | grep -v JAVA_TOOL_OPTIONS || true
 cd ../..
 SIZE=$(stat -c %s dist/SuperTux-lite.jar)
 { cat build/MANIFEST.MF; echo "MIDlet-Jar-URL: SuperTux-lite.jar"; echo "MIDlet-Jar-Size: $SIZE"; } > dist/SuperTux-lite.jad
+# the full jar without the ATTNW mod (MP3 music, everything GPL): the one to publish, since ATTNW's
+# music and many of its backgrounds come from other games
+if [ -f res-atnw-only.txt ]; then
+  mkdir -p build/gpl && cd build/gpl && unzip -q -o ../../dist/SuperTux.jar && \
+    xargs rm -f < ../../res-atnw-only.txt && mv x/g-lite.txt x/g.txt && rm -f x/g-atnw.txt && \
+    $J/bin/jar cfm ../../dist/SuperTux-noattnw.jar META-INF/MANIFEST.MF $(ls | grep -v META-INF) 2>&1 | grep -v JAVA_TOOL_OPTIONS || true
+  cd ../..
+  SIZE=$(stat -c %s dist/SuperTux-noattnw.jar)
+  { cat build/MANIFEST.MF; echo "MIDlet-Jar-URL: SuperTux-noattnw.jar"; echo "MIDlet-Jar-Size: $SIZE"; } > dist/SuperTux-noattnw.jad
+fi
+# Adventure To The New World (ATTNW) edition (when convert.py was given the mod): its three adventures and
+# islands, like the mod's own data swap; its own MIDlet name so it installs next to SuperTux
+if [ -f res-atnw-only.txt ]; then
+  mkdir -p build/atnw && cd build/atnw && unzip -q -o ../../dist/SuperTux.jar && \
+    rm -f l/a[0-9]*.bin l/t[0-9]*.bin l/o[0-9]*.bin w/0.bin x/g-lite.txt && mv x/g-atnw.txt x/g.txt && \
+    sed 's/^MIDlet-1: SuperTux,/MIDlet-1: SuperTux ATTNW,/; s/^MIDlet-Name: SuperTux$/MIDlet-Name: SuperTux ATTNW/; s/^MIDlet-Description: .*/MIDlet-Description: Adventure To The New World (ATTNW) by Miksy91, on SuperTux 0.1.3 J2ME/' \
+      ../MANIFEST.MF > ../atnw.mf && \
+    $J/bin/jar cfm ../../dist/SuperTux-ATTNW.jar ../atnw.mf $(ls | grep -v META-INF) 2>&1 | grep -v JAVA_TOOL_OPTIONS || true
+  cd ../..
+  SIZE=$(stat -c %s dist/SuperTux-ATTNW.jar)
+  { cat build/atnw.mf; echo "MIDlet-Jar-URL: SuperTux-ATTNW.jar"; echo "MIDlet-Jar-Size: $SIZE"; } > dist/SuperTux-ATTNW.jad
+fi
 ls -la dist

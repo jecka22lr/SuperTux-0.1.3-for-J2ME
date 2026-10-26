@@ -29,6 +29,7 @@ final class Menu {
   int posX = -1;                          // screen x of the centre (-1: middle of the screen)
   boolean arrangeLeft;
   long effectEnd;                         // slide-in effect (500 ms, real time: game time stops in pause)
+  static boolean noEffects;               // Options > Detail > Potato
 
   Menu add(int k, String t, int ident) { return add(k, t, ident, null, false); }
 
@@ -183,6 +184,16 @@ final class Menu {
     return s.length() > r ? ".." + s.substring(s.length() - (r - 2)) : s;     // keep the end in view while typing
   }
 
+  // the longest choice of any left/right item: every value box gets this width, so the labels line
+  // up and the menu doesn't change size while cycling through values
+  int selLen() {
+    int m = 0;
+    for (int i = 0; i < count; i++)
+      if (kind[i] == STRINGSELECT && list[i] != null)
+        for (int j = 0; j < list[i].length; j++) m = Math.max(m, list[i][j].length());
+    return m;
+  }
+
   String listText(int i) {
     String s = list[i] != null && list[i].length > 0 ? list[i][listActive[i]] : "";
     int r = room(i);
@@ -193,7 +204,7 @@ final class Menu {
     int w = 0;
     for (int i = 0; i < count; i++) {
       boolean field = kind[i] == TEXTFIELD || kind[i] == NUMFIELD || kind[i] == CONTROLFIELD;
-      int l = text[i].length() + (field ? shown(i).length() + 1 : 0) + listText(i).length();
+      int l = text[i].length() + (field ? shown(i).length() + 1 : 0) + (kind[i] == STRINGSELECT ? selLen() : listText(i).length());
       if (l > w) { w = l; if (kind[i] == TOGGLE) w += 2; }
     }
     return w * 16 + 24;
@@ -215,7 +226,7 @@ final class Menu {
     if (itemY.length < count) itemY = new int[count + 8];
     for (int i = 0; i < count; i++) itemY[i] = (py + 24 * i - mh / 2 + 12) / 2;
     long t = System.currentTimeMillis();
-    int eff = effectEnd > t ? (int) (effectEnd - t) / 4 : 0;
+    int eff = !noEffects && effectEnd > t ? (int) (effectEnd - t) / 4 : 0;
     for (int i = 0; i < count; i++) {
       int eo = (i % 2) != 0 ? eff : -eff;
       int y = py + 24 * i - mh / 2 + 12 + eo;
@@ -225,7 +236,7 @@ final class Menu {
       String in = field ? shown(i) : "";
       int iw = field ? (in.length() + 1) * 8 : 0;
       String lt = listText(i);
-      int lw = lt.length() * 8;
+      int lw = (kind[i] == STRINGSELECT ? selLen() : lt.length()) * 8;
       int x = cx;
       if (arrangeLeft) x += 12 - mw / 4 + (tw + iw + lw) / 2;
       boolean act = i == active;
@@ -251,10 +262,12 @@ final class Menu {
           break;
         }
         case STRINGSELECT: {
-          int lp2 = lw + 8, lp = lw / 2, tp = (tw + 8) / 2;
-          Res.drawSpriteTL(g, Spr.IC_LEFT, (160 + x - cx - lp + tp - 17) / 2 - 160 + cx, (y - 8) / 2);
-          Res.drawSpriteTL(g, Spr.IC_RIGHT, (160 + x - cx - lp + tp - 1 + lp2) / 2 - 160 + cx, (y - 8) / 2);
-          g.setColor(0xffffff); g.fillRect(x + tp - lp2 / 2 - 1, (y - 10) / 2, lp2 + 2, 10);
+          int lp2 = lw + 8, tp = (tw + 8) / 2;
+          // the arrows sit right against the value box (the 320x240 build's halved x put them by the label)
+          int bx = x + tp - lp2 / 2 - 1;
+          Res.drawSpriteTL(g, Spr.IC_LEFT, bx - 9, (y - 8) / 2);
+          Res.drawSpriteTL(g, Spr.IC_RIGHT, bx + lp2 + 3, (y - 8) / 2);
+          g.setColor(0xffffff); g.fillRect(bx, (y - 10) / 2, lp2 + 2, 10);
           Res.fillAlpha(g, x + tp - lp2 / 2, (y - 9) / 2, lp2, 9, 0x80000000);
           text480(g, Res.GOLD, lt, x + tp, y, 2);
           text480(g, font, text[i], x - lp2 / 2, y, shadow);

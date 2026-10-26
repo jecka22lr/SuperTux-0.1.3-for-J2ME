@@ -12,14 +12,29 @@ DATA = sys.argv[1]      # .../supertux-0.1.3/data (half-size images + supertux.s
 OUT = sys.argv[2]       # project root
 IMG = os.path.join(DATA, 'images')
 SYM = sys.argv[3] if len(sys.argv) > 3 else DATA   # Jecka's Symbian 0.1.3 data
+# argv[5]: Miksy91's "Adventure To The New World" (ATTNW) (the folder holding ADV 1, ADV 2, ADV 3)
+ATNW = sys.argv[5] if len(sys.argv) > 5 else None
+ATNW1 = os.path.join(ATNW, 'ADV 1', 'data') if ATNW else None
+HALF = os.path.join(OUT, 'build', 'half')          # full-size images shrunk to the half-size data
+def half(path):
+    # the port's data is 0.1.3 at half size (GP2X/Symbian); the mod's own images are full size
+    os.makedirs(HALF, exist_ok=True)
+    out = os.path.join(HALF, os.path.basename(os.path.dirname(path)) + '_' + os.path.basename(path))
+    if not out.lower().endswith('.png'): out = os.path.splitext(out)[0] + '.png'
+    if not os.path.exists(out):
+        im = Image.open(path)
+        im = im.convert('RGBA') if im.mode in ('RGBA', 'LA', 'P') else im.convert('RGB')
+        im.resize((max(1, im.size[0] // 2), max(1, im.size[1] // 2)), Image.LANCZOS).save(out)
+    return out
 
 # ---------- tiny s-expression reader ----------
 def tokens(s):
-    s = re.sub(r';[^\n]*', '', s)
-    for m in re.finditer(r'"((?:[^"\\]|\\.)*)"|([()])|([^\s()"]+)', s):
+    # comments run from ; to the end of the line, but a ; inside a string is just text
+    for m in re.finditer(r'"((?:[^"\\]|\\.)*)"|(;[^\n]*)|([()])|([^\s()";]+)', s):
+        if m.group(2): continue
         if m.group(1) is not None: yield ('s', m.group(1))
-        elif m.group(2): yield (m.group(2), None)
-        else: yield ('a', m.group(3))
+        elif m.group(3): yield (m.group(3), None)
+        else: yield ('a', m.group(4))
 def parse(s):
     stack = [[]]
     for k, v in tokens(s):
@@ -91,6 +106,23 @@ for e in ts[1:]:
             goal=bool(one(e, 'goal', False)), data=one(e, 'data', 0) or 0,
             anim=one(e, 'anim-speed', 25) or 25, next=one(e, 'next-tile', 0) or 0,
             images=strs(e, 'images'), editor=strs(e, 'editor-images'))
+stock_tiles = set(tiles)
+mod_groups = []
+if ATNW:
+    mts = parse(open(os.path.join(ATNW1, 'images', 'tilesets', 'supertux.stgt'), encoding='latin-1').read())[0]
+    for e in mts[1:]:
+        if isinstance(e, list) and e and e[0] == 'tile' and one(e, 'id') not in tiles:
+            tid = one(e, 'id')
+            tiles[tid] = dict(
+                solid=bool(one(e, 'solid', False)), brick=bool(one(e, 'brick', False)),
+                ice=bool(one(e, 'ice', False)), water=bool(one(e, 'water', False)),
+                fullbox=bool(one(e, 'fullbox', False)), distro=bool(one(e, 'distro', False)),
+                goal=bool(one(e, 'goal', False)), data=one(e, 'data', 0) or 0,
+                anim=one(e, 'anim-speed', 25) or 25, next=one(e, 'next-tile', 0) or 0,
+                images=[half(os.path.join(ATNW1, 'images', 'tilesets', s)) for s in strs(e, 'images')],
+                editor=[half(os.path.join(ATNW1, 'images', 'tilesets', s)) for s in strs(e, 'editor-images')])
+        elif isinstance(e, list) and e and e[0] == 'tilegroup':
+            mod_groups.append(e)
 ids = sorted(tiles)
 cidx = {tid: i for i, tid in enumerate(ids)}      # compact index; tile 0 -> 0
 assert ids[0] == 0 and len(ids) < 256, len(ids)
@@ -119,6 +151,9 @@ groups = []
 for e in ts[1:]:
     if isinstance(e, list) and e and e[0] == 'tilegroup':
         groups.append((one(e, 'name'), [cidx[t] for t in (field(e, 'tiles') or []) if isinstance(t, int) and t in cidx]))
+for e in mod_groups:          # the mod's groups holding its new tiles (Forest, Darksnow...)
+    new = [cidx[t] for t in (field(e, 'tiles') or []) if isinstance(t, int) and t in cidx and t not in stock_tiles]
+    if new and one(e, 'name') not in [g[0] for g in groups]: groups.append((one(e, 'name'), new))
 groups.sort(key=lambda g: g[0])
 with open(os.path.join(OUT, 'res', 'te.bin'), 'wb') as f:
     f.write(struct.pack('>H', len(ids)))
@@ -212,6 +247,9 @@ def background(name):
     key = os.path.splitext(name)[0].lower()
     if key in bgnames: return bgnames[key]
     cands = [p for p in glob.glob(os.path.join(IMG, 'background', '*')) if os.path.splitext(os.path.basename(p))[0].lower() == key]
+    if not cands and ATNW:
+        cands = [half(p) for p in glob.glob(os.path.join(ATNW1, 'images', 'background', '*'))
+                 if os.path.splitext(os.path.basename(p))[0].lower() == key]
     if not cands: return 255
     n = len(bgnames); bgnames[key] = n
     Image.open(cands[0]).convert('RGB').quantize(128).save(os.path.join(OUT, 'res', 'b', '%d.png' % n), optimize=True)
@@ -225,6 +263,50 @@ musics = {}
 def music(name):
     if not name: return 255
     return musics.setdefault(name, len(musics))
+def convert_level(path, d, letter, n):
+    global total
+    lv = parse(open(path, encoding='latin-1').read())[0][1:]
+    width = one(lv, 'width'); assert one(lv, 'version', 0) >= 1, path
+    def tm(name):
+        v = field(lv, name) or []
+        out = bytearray(width * 15)
+        for i, t in enumerate(v[:width * 15]): out[i] = cidx.get(t, 0)
+        return bytes(out)
+    objs = []
+    for o in field(lv, 'objects') or []:
+        k = ALIASES.get(o[0], o[0])
+        if k in BADGUYS:
+            x, y = one(o[1:], 'x', 0), one(o[1:], 'y', 0)
+            if 0 <= x < 65536 and -32768 <= y < 32768:   # x up to 65535: levels can be 1200 tiles wide
+                objs.append((BADGUYS.index(k), x, y, 1 if one(o[1:], 'stay-on-platform', False) else 0))
+    resets = [(one(p[1:], 'x', 0), one(p[1:], 'y', 0)) for p in (field(lv, 'reset-points') or [])
+              if 0 <= one(p[1:], 'x', 0) < 65536]
+    name = (one(lv, 'name', 'Noname') or 'Noname').encode('latin-1', 'replace')[:60]
+    author = (one(lv, 'author', 'unknown author') or 'unknown author').encode('latin-1', 'replace')[:60]
+    b = bytearray()
+    b += struct.pack('>B', len(name)) + name
+    b += struct.pack('>B', len(author)) + author
+    b += struct.pack('>HhhH', width, one(lv, 'start_pos_x', 100), one(lv, 'start_pos_y', 170), one(lv, 'time', 500))
+    b += struct.pack('>BBhhB', background(one(lv, 'background', '')), music(one(lv, 'music', '')),
+                     int(float(one(lv, 'gravity', 10)) * 10), int(float(one(lv, 'hor_autoscroll_speed', 0) or 0) * 10),
+                     (1 if one(lv, 'back_scrolling', False) else 0))
+    b += struct.pack('>B', max(0, min(255, int(one(lv, 'bkgd_speed', 50) or 50))))
+    for c in ('red', 'green', 'blue'):
+        b += struct.pack('>B', max(0, min(255, int(one(lv, 'bkgd_%s_top' % c, 0) or 0))))
+    for c in ('red', 'green', 'blue'):
+        b += struct.pack('>B', max(0, min(255, int(one(lv, 'bkgd_%s_bottom' % c, 0) or 0))))
+    ps = one(lv, 'particle_system', '') or ''
+    b += struct.pack('>B', {'': 0, 'clouds': 1, 'snow': 2}.get(ps, 0))
+    b += tm('background-tm') + tm('interactive-tm') + tm('foreground-tm')
+    b += struct.pack('>H', len(objs))
+    for o in objs: b += struct.pack('>BHhB', *o)
+    b += struct.pack('>B', len(resets))
+    for r in resets: b += struct.pack('>Hh', *r)
+    open(os.path.join(OUT, 'res', 'l', '%s%d.bin' % (letter, n + 1)), 'wb').write(b)
+    level_ids['%s/%s' % (d, os.path.basename(path))] = '%s%d' % (letter, n + 1)
+    level_titles['%s/%s' % (d, os.path.basename(path))] = name
+    total += 1
+
 sets = [('world1', 'a'), ('bonus1', 'b'), ('bonus2', 'c'), ('misc', 'm')]
 level_ids = {}; level_titles = {}
 total = 0
@@ -236,44 +318,7 @@ for d, letter in sets:
     else:
         files.sort()
     for n, path in enumerate(files):
-        lv = parse(open(path, encoding='latin-1').read())[0][1:]
-        width = one(lv, 'width'); assert one(lv, 'version', 0) >= 1, path
-        def tm(name):
-            v = field(lv, name) or []
-            out = bytearray(width * 15)
-            for i, t in enumerate(v[:width * 15]): out[i] = cidx.get(t, 0)
-            return bytes(out)
-        objs = []
-        for o in field(lv, 'objects') or []:
-            k = ALIASES.get(o[0], o[0])
-            if k in BADGUYS:
-                objs.append((BADGUYS.index(k), one(o[1:], 'x', 0), one(o[1:], 'y', 0), 1 if one(o[1:], 'stay-on-platform', False) else 0))
-        resets = [(one(p[1:], 'x', 0), one(p[1:], 'y', 0)) for p in (field(lv, 'reset-points') or [])]
-        name = (one(lv, 'name', 'Noname') or 'Noname').encode('latin-1', 'replace')[:60]
-        author = (one(lv, 'author', 'unknown author') or 'unknown author').encode('latin-1', 'replace')[:60]
-        b = bytearray()
-        b += struct.pack('>B', len(name)) + name
-        b += struct.pack('>B', len(author)) + author
-        b += struct.pack('>HhhH', width, one(lv, 'start_pos_x', 100), one(lv, 'start_pos_y', 170), one(lv, 'time', 500))
-        b += struct.pack('>BBhhB', background(one(lv, 'background', '')), music(one(lv, 'music', '')),
-                         int(float(one(lv, 'gravity', 10)) * 10), int(float(one(lv, 'hor_autoscroll_speed', 0) or 0) * 10),
-                         (1 if one(lv, 'back_scrolling', False) else 0))
-        b += struct.pack('>B', int(one(lv, 'bkgd_speed', 50) or 50))
-        for c in ('red', 'green', 'blue'):
-            b += struct.pack('>B', int(one(lv, 'bkgd_%s_top' % c, 0) or 0))
-        for c in ('red', 'green', 'blue'):
-            b += struct.pack('>B', int(one(lv, 'bkgd_%s_bottom' % c, 0) or 0))
-        ps = one(lv, 'particle_system', '') or ''
-        b += struct.pack('>B', {'': 0, 'clouds': 1, 'snow': 2}.get(ps, 0))
-        b += tm('background-tm') + tm('interactive-tm') + tm('foreground-tm')
-        b += struct.pack('>H', len(objs))
-        for o in objs: b += struct.pack('>BhhB', *o)
-        b += struct.pack('>B', len(resets))
-        for r in resets: b += struct.pack('>hh', *r)
-        open(os.path.join(OUT, 'res', 'l', '%s%d.bin' % (letter, n + 1)), 'wb').write(b)
-        level_ids['%s/%s' % (d, os.path.basename(path))] = '%s%d' % (letter, n + 1)
-        level_titles['%s/%s' % (d, os.path.basename(path))] = name
-        total += 1
+        convert_level(path, d, letter, n)
 print('levels', total, 'backgrounds', bgnames, 'music', musics)
 
 
@@ -295,14 +340,22 @@ with open(os.path.join(OUT, 'res', 'wt.bin'), 'wb') as f:
         f.write(struct.pack('>BBH', flags, ow, wtile_sprite[tid]))
 WORLDMAPS = ['world1.stwm', 'bonusisland1.stwm', 'bonusisland2.stwm']
 texts = set()
-for wi, wm in enumerate(WORLDMAPS):
-    root = parse(open(os.path.join(SYM, 'levels', 'worldmaps', wm), encoding='latin-1').read())[0][1:]
+def text_out(src, name, prefix):
+    # stock texts keep their names; a mod's get its prefix (every adventure has its own extro.txt)
+    if not prefix: texts.add(name); return name
+    out = prefix + name
+    raw = open(os.path.join(src, name), 'rb').read().replace(b'\r', b'')
+    os.makedirs(os.path.join(OUT, 'res', 'x'), exist_ok=True)
+    open(os.path.join(OUT, 'res', 'x', out), 'wb').write(raw)
+    return out
+def write_worldmap(src, wm, wi, prefix='', title=None):
+    root = parse(open(os.path.join(src, 'levels', 'worldmaps', wm), encoding='latin-1').read())[0][1:]
     props = field(root, 'properties') or []
     tm = field(root, 'tilemap') or []
     W, H = one(tm, 'width', 20), one(tm, 'height', 15)
     data = field(tm, 'data') or []
     b = bytearray()
-    b += lstr(one(props, 'name', '<no file>'))
+    b += lstr(title or one(props, 'name', '<no file>'))
     b += struct.pack('>B', music(one(props, 'music', 'salcon.mod') or 'salcon.mod'))
     b += struct.pack('>hhhh', one(props, 'start_pos_x', 4), one(props, 'start_pos_y', 5), W, H)
     b += bytes(data[:W * H]) + bytes(max(0, W * H - len(data)))
@@ -313,7 +366,7 @@ for wi, wm in enumerate(WORLDMAPS):
         lid = level_ids.get(name, '') if name else ''
         if name and not lid: print('world map', wm, 'unknown level', name)
         extro = one(lv, 'extro-filename', '') or ''
-        if extro: texts.add(extro)
+        if extro: extro = text_out(src, extro, prefix)
         def bb(k, d):
             v = one(lv, k, d)
             return 1 if v else 0
@@ -326,6 +379,8 @@ for wi, wm in enumerate(WORLDMAPS):
         b += struct.pack('>hh', one(lv, 'dest_x', -1), one(lv, 'dest_y', -1)) + lstr(one(lv, 'teleport-message', '') or '')
     open(os.path.join(OUT, 'res', 'w', '%d.bin' % wi), 'wb').write(b)
     print('world map', wm, W, 'x', H, len(lvls), 'entries')
+for wi, wm in enumerate(WORLDMAPS):
+    write_worldmap(SYM, wm, wi)
 
 # ---------- text files, sounds, title pictures ----------
 os.makedirs(os.path.join(OUT, 'res', 'x'), exist_ok=True)
@@ -372,6 +427,63 @@ with open(os.path.join(OUT, 'src', 'Spr.java'), 'a') as f:
     f.write('}\n')
 print('pictures', pics, 'texts', sorted(texts))
 
+# ---------- community level packs made for 0.1.3 (GPL, from the June 2013 add-on collection) ----------
+# argv[4]: the collection's levels folder. Only format-1 (0.1.3) levels; the game lists the packs
+# under Bonus Levels (Editor.PACK_DIRS / PACK_TITLES must match this list).
+PACKS = [('tsb', 't', 'tsb', ['tsb-level%02d.stl' % i for i in range(1, 20)], 'intro-tsb.txt'),
+         ('ctclassic', 'o', "CT's Domain", ['snow-old1.stl', 'snow-old2.stl', 'snow-old3.stl', 'snow-old7.stl'], None)]
+if len(sys.argv) > 4:
+    for d, letter, folder, names, story in PACKS:
+        for n, fn in enumerate(names):
+            convert_level(os.path.join(sys.argv[4], folder, fn), d, letter, n)
+        if story:
+            # 0.3-style (supertux-text (text "...")) with '#' for plain lines -> 0.1.3's ' ' lines
+            raw = open(os.path.join(sys.argv[4], folder, story), encoding='latin-1').read().replace('\r', '')
+            if '(supertux-text' in raw:
+                raw = one(parse(raw)[0][1:], 'text', '').replace('\\"', '"')
+                raw = '\n'.join(' ' + l[1:] if l.startswith('#') else l for l in raw.split('\n'))
+            open(os.path.join(OUT, 'res', 'x', story), 'wb').write(raw.encode('latin-1', 'replace'))
+    print('level packs', [(d, len(names)) for d, _, _, names, _ in PACKS], 'music', musics)
+
+# ---------- Adventure to the New World (Miksy91, for 0.1.3) ----------
+# Three adventures that each replace Icyisland, plus Bonus Island III, the Islands of Illusion, the
+# hard adventure and the I Wanna Be The SuperTux subset. Bonus Islands I and II are the stock ones.
+# x/g.txt (and g-lite.txt, g-atnw.txt for the other jars) tells the game which worlds a jar has:
+#   S|title|map|save prefix|intro     a world for Start Game
+#   B|title|map                       a world map under Bonus Levels
+#   P|folder|letter|title|author|story a level subset under Bonus Levels
+ATNW_SETS = [('ADV 1', 'Adv', 'd'), ('ADV 2', 'Treasure Hunt', 'e'), ('ADV 3', 'Adv III', 'f'),
+             ('ADV 1', 'AdvHard', 'h'), ('ADV 1', 'Illusion', 'i'), ('ADV 1', 'IWBTST', 'j'), ('ADV 1', 'bonus3', 'k')]
+STOCK_G = ['S|Icyisland|0|slot|/x/intro.txt', 'B|Bonus Island I|1', 'B|Bonus Island II|2']
+PACK_G = ["P|tsb|t|Tux Strikes Back|Christian Schaefers|/x/intro-tsb.txt",
+          "P|ctclassic|o|CT's Domain|CT. da'Bomb and friends|"]
+music('credits.xm'); music('leveldone.mod')      # the editor's Song list has every stock song
+stock_music = len(musics)
+stock_bgs = len(bgnames)
+atnw_g = []
+if ATNW:
+    def num(p): return int((re.findall(r'\d+', os.path.basename(p)) or ['0'])[-1])
+    for adv, d, letter in ATNW_SETS:
+        files = sorted(glob.glob(os.path.join(ATNW, adv, 'data', 'levels', d, '*.stl')), key=num)
+        for n, path in enumerate(files): convert_level(path, d, letter, n)
+    for i, adv in enumerate(['ADV 1', 'ADV 2', 'ADV 3']):
+        src = os.path.join(ATNW, adv, 'data')
+        title = ['ATTNW 1', 'ATTNW 2', 'ATTNW 3'][i]
+        write_worldmap(src, 'world1.stwm', 3 + i, 'atnw%d-' % (i + 1), title)
+        intro = text_out(src, 'intro.txt', 'atnw%d-' % (i + 1))
+        atnw_g.append('S|%s|%d|atnw%d-slot|/x/%s' % (title, 3 + i, i + 1, intro))
+    for i, (wm, title) in enumerate([('bonusisland3.stwm', 'Bonus Island III'), ('iof.stwm', 'Islands of Illusion'),
+                                     ('AdvHard.stwm', 'ATTNW (Hard)')]):
+        write_worldmap(ATNW1, wm, 6 + i, 'atnw-', title)
+        atnw_g.append('B|%s|%d' % (title, 6 + i))
+    atnw_g.append('P|IWBTST|j|I Wanna Be The SuperTux|Miksy91|')
+    print('adventure to the new world: levels', total, 'backgrounds', len(bgnames), 'music', len(musics))
+def write_g(name, lines):
+    open(os.path.join(OUT, 'res', 'x', name), 'w').write('\n'.join(lines) + '\n')
+write_g('g-lite.txt', STOCK_G + PACK_G)
+write_g('g.txt', STOCK_G + [l for l in atnw_g if l.startswith('S')] + [l for l in atnw_g if not l.startswith('S')] + PACK_G)
+if ATNW: write_g('g-atnw.txt', ['T|ATTNW by Miksy91'] + [l for l in atnw_g if l.startswith('S')] + STOCK_G[1:] + [l for l in atnw_g if not l.startswith('S')])
+
 # ---------- music: XM -> MIDI ----------
 if len(sys.argv) > 3:
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -379,8 +491,9 @@ if len(sys.argv) > 3:
     mdir = os.path.join(sys.argv[3], 'music')
     os.makedirs(os.path.join(OUT, 'res', 'm'), exist_ok=True)
     def find(name):
-        for f in os.listdir(mdir):
-            if f.lower() == name.lower(): return os.path.join(mdir, f)
+        for d in [mdir] + ([os.path.join(ATNW1, 'music')] if ATNW else []):
+            for f in os.listdir(d):
+                if f.lower() == name.lower(): return os.path.join(d, f)
         return None
     import subprocess, shutil
     have_ffmpeg = shutil.which('ffmpeg') is not None
@@ -388,8 +501,15 @@ if len(sys.argv) > 3:
         p = find(src)
         if not p: print('missing music', src); return
         out = os.path.join(OUT, 'res', 'm', dst)
-        mod2mid.convert(p, out)
-        if have_ffmpeg:
+        ext = os.path.splitext(p)[1].lower()
+        if ext == '.mid':                       # a MIDI song: every phone plays it as it is
+            shutil.copy(p, out); return
+        try: mod2mid.convert(p, out)
+        except Exception as e: print('no MIDI version of', src, '(%s)' % e.__class__.__name__)
+        if have_ffmpeg and ext in ('.wav', '.ogg'):
+            subprocess.run(['ffmpeg', '-hide_banner', '-v', 'error', '-y', '-i', p, '-ac', '1', '-ar', '22050',
+                            '-c:a', 'libmp3lame', '-b:a', '24k', out[:-4] + '.mp3'], check=True)
+        elif have_ffmpeg:
             # the real thing: libopenmpt renders the tracker song, mono 22 kHz MP3 at 24 kbit/s
             subprocess.run(['ffmpeg', '-hide_banner', '-v', 'error', '-y', '-f', 'libopenmpt', '-i', p,
                             '-ac', '1', '-ar', '22050', '-c:a', 'libmp3lame', '-b:a', '24k',
@@ -402,17 +522,27 @@ if len(sys.argv) > 3:
         key = os.path.basename(p).lower() if p else name
         if key in done: alias.append('%s=%s' % (stem, done[key])); return
         conv(name, stem + '.mid'); done[key] = stem
-    music('credits.xm'); music('leveldone.mod')      # the editor's Song list has every song
-    with open(os.path.join(OUT, 'res', 'm', 'n.txt'), 'w') as f:
-        for name, n in sorted(musics.items(), key=lambda kv: kv[0].lower()): f.write('%d %s\n' % (n, name))
+    with open(os.path.join(OUT, 'res', 'm', 'n.txt'), 'w') as f:     # the editor's list: stock songs
+        for name, n in sorted(musics.items(), key=lambda kv: kv[0].lower()):
+            if n < stock_music: f.write('%d %s\n' % (n, name))
     for name, n in musics.items():
         song(name, '%d' % n)
         base, ext = os.path.splitext(name)
-        if find(base + '-fast' + ext): song(base + '-fast' + ext, '%df' % n)
+        # the mod's songs keep one version: their hurry-up copies would double the jar
+        if n < stock_music and find(base + '-fast' + ext): song(base + '-fast' + ext, '%df' % n)
         else: alias.append('%df=%d' % (n, n))   # no hurry-up version: 0.1.3 keeps the normal song
     song('salcon.mod', 'h'); song('leveldone.mod', 'd'); song('theme.mod', 't'); song('credits.xm', 'cr')
     open(os.path.join(OUT, 'res', 'm', 'a.txt'), 'w').write('\n'.join(alias) + '\n')
     print('music aliases', alias)
+    # files only the full and Adventure jars carry (build.sh leaves them out of the lite jar)
+    if ATNW:
+        own = ['l/%s%d.bin' % (letter, n) for _, d, letter in ATNW_SETS
+               for n in range(1, 1 + len(glob.glob(os.path.join(OUT, 'res', 'l', letter + '*.bin'))))]
+        own += ['w/%d.bin' % i for i in range(3, 9)] + ['x/' + f for f in os.listdir(os.path.join(OUT, 'res', 'x')) if f.startswith('atnw')]
+        own += ['b/%d.png' % n for k, n in bgnames.items() if n >= stock_bgs]
+        own += ['m/' + f for f in os.listdir(os.path.join(OUT, 'res', 'm')) if re.match(r'(\d+)', f) and int(re.match(r'(\d+)', f).group(1)) >= stock_music]
+        open(os.path.join(OUT, 'res-atnw-only.txt'), 'w').write('\n'.join(sorted(own)) + '\n')
+        print('adventure-only files', len(own))
     print('music', sorted(os.listdir(os.path.join(OUT, 'res', 'm'))))
 
 # the MIDlet icon: 0.1.3's 32x32 icon.xpm (PIL can't read it; ImageMagick can)

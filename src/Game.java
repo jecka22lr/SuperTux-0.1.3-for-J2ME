@@ -110,11 +110,77 @@ final class Game extends GameCanvas implements Runnable {
   // menus (setup.cpp)
   static final int M_START = 1, M_CONTRIB = 2, M_OPTIONS = 3, M_CONTROLS = 4, M_CREDITS = 5, M_QUIT = 6,
       M_SOUND = 10, M_MUSIC = 11, M_FPS = 12, M_LANDSCAPE = 13, M_TOUCH = 14, M_CONTINUE = 20, M_ABORT = 21,
-      M_WM_RETURN = 30, M_WM_QUIT = 31, M_YES = 41, M_NO = 40, M_EDITOR = 7, M_KEYS = 50, M_HSNAME = 60;
+      M_WM_RETURN = 30, M_WM_QUIT = 31, M_YES = 41, M_NO = 40, M_EDITOR = 7, M_KEYS = 50, M_HSNAME = 60,
+      M_STORY = 999, M_DETAIL = 15, M_FPSCAP = 16, M_RAM = 17;   // above any level number in a subset's level list
   Menu mainMenu, optionsMenu, loadGameMenu, contribMenu, gameMenu, worldmapMenu, confirmMenu, keysMenu,
       contribSubsetMenu, highscoreMenu;
   String[] contribSubsets; int contribSubset;
   int confirmSlot;
+  // the worlds this jar has (x/g.txt, written by tools/convert.py): Start Game worlds, each with
+  // its own save slots and intro, and the world maps under Bonus Levels
+  String[] startTitle, startSave, startIntro; int[] startMap; int curStart;
+  String[] bonusTitle; int[] bonusMap;
+  String titleNote;
+  static final String RELEASE = "Beta Release 1.2";
+  // Options > Music and Detail. Low: plain sky colour instead of the background picture, no snow or
+  // clouds. Potato: also no tile animations (coins stand still), no flying scores, coins, brick
+  // pieces or bouncing bricks, and no fades or menu slides: everything is there, with as little
+  // drawing as possible, for slow phones
+  static final String[] MUSIC_MODES = { "Normal", "MIDI", "Off" };
+  static final String[] DETAIL_MODES = { "Full", "Low", "Potato" };
+  static final int FULL = 0, LOW = 1, POTATO = 2;
+  int detail = FULL;
+  int musicMode() { return !music.enabled ? 2 : music.midiOnly ? 1 : 0; }
+  // Options > FPS cap: the shortest a frame may take. A lower cap leaves the phone idle time between
+  // frames, which can smooth out sound and music on slow phones
+  static final String[] FPSCAP_MODES = { "Max", "25", "20", "15" };
+  static final int[] FPSCAP_MS = { 30, 40, 50, 66 };
+  int fpsCap;
+  // Options > RAM saver: no level background pictures (sky colour instead, like Low), and the logo,
+  // story pictures and Potato caches are let go before each level loads
+  boolean ramSaver;
+  Menu adventureMenu;
+
+  void loadWorlds() {
+    String[] l = Res.lines("/x/g.txt");
+    Vector s = new Vector(), b = new Vector(), p = new Vector();
+    for (int i = 0; i < l.length; i++) {
+      String[] f = split(l[i], '|');
+      if (f[0].equals("S") && f.length >= 5) s.addElement(f);
+      else if (f[0].equals("B") && f.length >= 3) b.addElement(f);
+      else if (f[0].equals("P") && f.length >= 5) p.addElement(f);
+      else if (f[0].equals("T") && f.length >= 2) titleNote = f[1];
+    }
+    if (s.size() == 0) s.addElement(new String[] { "S", "Icyisland", "0", "slot", "/x/intro.txt" });
+    startTitle = new String[s.size()]; startSave = new String[s.size()]; startIntro = new String[s.size()]; startMap = new int[s.size()];
+    for (int i = 0; i < s.size(); i++) {
+      String[] f = (String[]) s.elementAt(i);
+      startTitle[i] = f[1]; startMap[i] = Integer.parseInt(f[2]); startSave[i] = f[3]; startIntro[i] = f[4];
+    }
+    bonusTitle = new String[b.size()]; bonusMap = new int[b.size()];
+    for (int i = 0; i < b.size(); i++) {
+      String[] f = (String[]) b.elementAt(i);
+      bonusTitle[i] = f[1]; bonusMap[i] = Integer.parseInt(f[2]);
+    }
+    String[] dirs = new String[p.size()], titles = new String[p.size()], authors = new String[p.size()], story = new String[p.size()];
+    String letters = "";
+    for (int i = 0; i < p.size(); i++) {
+      String[] f = (String[]) p.elementAt(i);
+      dirs[i] = f[1]; letters += f[2].charAt(0); titles[i] = f[3]; authors[i] = f[4];
+      story[i] = f.length > 5 && f[5].length() > 0 ? f[5] : null;
+    }
+    Editor.setPacks(dirs, letters, titles, authors, story);
+  }
+
+  static String[] split(String s, char c) {
+    Vector v = new Vector();
+    int from = 0, at;
+    while ((at = s.indexOf(c, from)) >= 0) { v.addElement(s.substring(from, at)); from = at + 1; }
+    v.addElement(s.substring(from));
+    String[] r = new String[v.size()];
+    v.copyInto(r);
+    return r;
+  }
 
   // title demo (title.cpp)
   boolean walking; long randomEnd;
@@ -131,6 +197,7 @@ final class Game extends GameCanvas implements Runnable {
     setFullScreenMode(true);
     tux = new Player(this);
     loadSettings();
+    loadWorlds();
     buildMenus();
   }
 
@@ -147,30 +214,43 @@ final class Game extends GameCanvas implements Runnable {
       byte[] b = WorldMap.read("stux");
       if (b != null) {
         landscape = b[0] != 0;
-        music.enabled = b[1] != 0;
-        if (b.length > 3) { sounds.enabled = b[2] != 0; showFps = b[3] != 0; }
-        if (b.length > 4 && b[4] >= 2 && b[4] <= 4) {
+        music.enabled = b[1] != 0; music.midiOnly = b[1] == 2;
+        if (b.length > 3) { sounds.mode = soundModeOf(b[2]); showFps = b[3] != 0; }
+        if (b.length > 4 && b[4] >= 2 && b[4] <= 6) {
           java.io.DataInputStream in = new java.io.DataInputStream(new java.io.ByteArrayInputStream(b, 5, b.length - 5));
           for (int i = 0; i < 5; i++) keymapUp[i] = in.readInt();
           hsScore = in.readInt(); hsName = in.readUTF();
           if (b[4] >= 3) for (int i = 0; i < 5; i++) keymapSide[i] = in.readInt();
           if (b[4] >= 4) showTouch = in.readBoolean();
+          if (b[4] >= 5) detail = Math.max(FULL, Math.min(POTATO, in.readByte()));
+          if (b[4] >= 6) { fpsCap = Math.max(0, Math.min(FPSCAP_MS.length - 1, in.readByte())); ramSaver = in.readBoolean(); }
         }
       }
     } catch (Throwable e) { }
+    Menu.noEffects = detail == POTATO;
     setLayout(landscape);
+  }
+
+  // settings byte 2: 0 off, 1 normal (what older versions saved for off / on), 2 fast, 3 MIDI, 4 Nokia
+  static int soundModeOf(byte b) {
+    return b == 0 ? Sound.OFF : b == 2 ? Sound.FAST : b == 3 ? Sound.MIDI : b == 4 ? Sound.NOKIA : Sound.NORMAL;
+  }
+  static int soundByte(int mode) {
+    return mode == Sound.OFF ? 0 : mode == Sound.FAST ? 2 : mode == Sound.MIDI ? 3 : mode == Sound.NOKIA ? 4 : 1;
   }
 
   void saveSettings() {
     try {
       java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
       java.io.DataOutputStream out = new java.io.DataOutputStream(bo);
-      out.writeByte(landscape ? 1 : 0); out.writeByte(music.enabled ? 1 : 0); out.writeByte(sounds.enabled ? 1 : 0);
-      out.writeByte(showFps ? 1 : 0); out.writeByte(4);
+      out.writeByte(landscape ? 1 : 0); out.writeByte(!music.enabled ? 0 : music.midiOnly ? 2 : 1); out.writeByte(soundByte(sounds.mode));
+      out.writeByte(showFps ? 1 : 0); out.writeByte(6);
       for (int i = 0; i < 5; i++) out.writeInt(keymapUp[i]);
       out.writeInt(hsScore); out.writeUTF(hsName);
       for (int i = 0; i < 5; i++) out.writeInt(keymapSide[i]);
       out.writeBoolean(showTouch);
+      out.writeByte(detail);
+      out.writeByte(fpsCap); out.writeBoolean(ramSaver);
       out.close();
       byte[] b = bo.toByteArray();
       RecordStore rs = RecordStore.openRecordStore("stux", true);
@@ -195,7 +275,11 @@ final class Game extends GameCanvas implements Runnable {
     mainMenu = new Menu(); optionsMenu = new Menu(); loadGameMenu = new Menu(); contribMenu = new Menu();
     gameMenu = new Menu(); worldmapMenu = new Menu(); confirmMenu = new Menu();
     mainMenu.posY = 300; mainMenu.posYPortrait = 370;    // leaves room for the logo and the credits
-    mainMenu.add(Menu.GOTO, "Start Game", M_START, loadGameMenu, false)
+    adventureMenu = new Menu();
+    adventureMenu.add(Menu.LABEL, "Start Game", 0).add(Menu.HL, "", 0);
+    for (int i = 0; i < startTitle.length; i++) adventureMenu.add(Menu.GOTO, startTitle[i], 300 + i, loadGameMenu, false);
+    adventureMenu.add(Menu.HL, "", 0).add(Menu.BACK, "Back", 0);
+    mainMenu.add(Menu.GOTO, "Start Game", M_START, startTitle.length > 1 ? adventureMenu : loadGameMenu, false)
         .add(Menu.GOTO, "Bonus Levels", M_CONTRIB, contribMenu, false)
         .add(Menu.GOTO, "Options", M_OPTIONS, optionsMenu, false)
         .add(Menu.ACTION, "Controls", M_CONTROLS)
@@ -203,13 +287,20 @@ final class Game extends GameCanvas implements Runnable {
         .add(Menu.ACTION, "Credits", M_CREDITS)
         .add(Menu.ACTION, "Quit", M_QUIT);
     optionsMenu.add(Menu.LABEL, "Options", 0).add(Menu.HL, "", 0)
-        .add(Menu.TOGGLE, "Sound     ", M_SOUND, null, sounds.enabled)
-        .add(Menu.TOGGLE, "Music     ", M_MUSIC, null, music.enabled)
+        .add(Menu.STRINGSELECT, "Sound     ", M_SOUND)
+        .add(Menu.STRINGSELECT, "Music     ", M_MUSIC)
+        .add(Menu.STRINGSELECT, "Detail    ", M_DETAIL)
+        .add(Menu.STRINGSELECT, "FPS cap   ", M_FPSCAP)
+        .add(Menu.TOGGLE, "RAM saver ", M_RAM, null, ramSaver)
         .add(Menu.TOGGLE, "Show FPS  ", M_FPS, null, showFps)
         .add(Menu.TOGGLE, "Landscape ", M_LANDSCAPE, null, landscape)
         .add(Menu.TOGGLE, "Show touch", M_TOUCH, null, showTouch)
         .add(Menu.GOTO, "Keyboard Setup", 0, keysMenu = new Menu(), false)
         .add(Menu.HL, "", 0).add(Menu.BACK, "Back", 0);
+    optionsMenu.setList(M_SOUND, Sound.MODES, sounds.mode);
+    optionsMenu.setList(M_MUSIC, MUSIC_MODES, musicMode());
+    optionsMenu.setList(M_DETAIL, DETAIL_MODES, detail);
+    optionsMenu.setList(M_FPSCAP, FPSCAP_MODES, fpsCap);
     keysMenu.add(Menu.LABEL, "Key Setup", 0).add(Menu.HL, "", 0)
         .add(Menu.CONTROLFIELD, "Left move", M_KEYS).add(Menu.CONTROLFIELD, "Right move", M_KEYS + 1)
         .add(Menu.CONTROLFIELD, "Jump", M_KEYS + 2).add(Menu.CONTROLFIELD, "Duck", M_KEYS + 3)
@@ -232,15 +323,19 @@ final class Game extends GameCanvas implements Runnable {
         .add(Menu.HL, "", 0).add(Menu.ACTION, "Quit Game", M_WM_QUIT);
   }
 
-  // generate_contrib_menu: the level editor's subsets, then the bonus islands
+  // generate_contrib_menu: the community packs, the level editor's subsets, then the bonus islands
   void generateContrib() {
-    contribSubsets = Editor.subsets();
+    String[] user = Editor.subsets();
+    int packs = Editor.PACK_DIRS.length;
+    contribSubsets = new String[packs + user.length];
+    System.arraycopy(Editor.PACK_DIRS, 0, contribSubsets, 0, packs);
+    System.arraycopy(user, 0, contribSubsets, packs, user.length);
     contribMenu.clear();
     contribMenu.add(Menu.LABEL, "Bonus Levels", 0).add(Menu.HL, "", 0);
     for (int i = 0; i < contribSubsets.length; i++)
       contribMenu.add(Menu.GOTO, Editor.subsetTitle(contribSubsets[i]), 100 + i, contribSubsetMenu, false);
-    contribMenu.add(Menu.ACTION, "Bonus Island I", 1).add(Menu.ACTION, "Bonus Island II", 2)
-        .add(Menu.HL, "", 0).add(Menu.BACK, "Back", 0);
+    for (int i = 0; i < bonusTitle.length; i++) contribMenu.add(Menu.ACTION, bonusTitle[i], 1 + i);
+    contribMenu.add(Menu.HL, "", 0).add(Menu.BACK, "Back", 0);
   }
 
   // keys: the menu's Keyboard Setup values
@@ -291,17 +386,40 @@ final class Game extends GameCanvas implements Runnable {
 
   // update_load_save_game_menu
   void updateSlots() {
+    loadGameMenu.text[0] = startTitle.length > 1 ? fitName(startTitle[curStart], sw / 8 - 1) : "Start Game";
     for (int i = 0; i < 5; i++) {
       loadGameMenu.kind[2 + i] = Menu.ACTION;
-      loadGameMenu.text[2 + i] = WorldMap.slotInfo(i + 1);
+      loadGameMenu.text[2 + i] = WorldMap.slotInfo(startSave[curStart], i + 1);
     }
   }
 
   // process_options_menu
   void optionsChanged() {
+    // Sound is a left/right choice, which doesn't count as a hit
+    if (optionsMenu.listOf(M_SOUND) != sounds.mode) {
+      sounds.setMode(optionsMenu.listOf(M_SOUND));
+      sounds.play(Sound.DISTRO);       // a sample of the new mode
+      saveSettings();
+    }
+    if (optionsMenu.listOf(M_MUSIC) != musicMode()) {
+      int m = optionsMenu.listOf(M_MUSIC);
+      if (m == 2) music.setEnabled(false);
+      else { music.setMidiOnly(m == 1); music.setEnabled(true); }
+      saveSettings();
+    }
+    if (optionsMenu.listOf(M_DETAIL) != detail) {
+      detail = optionsMenu.listOf(M_DETAIL);
+      Menu.noEffects = detail == POTATO;
+      saveSettings();
+    }
+    if (optionsMenu.listOf(M_FPSCAP) != fpsCap) {
+      fpsCap = optionsMenu.listOf(M_FPSCAP);
+      saveSettings();
+    }
     if (optionsMenu.check() < 0) return;
-    if (sounds.enabled != optionsMenu.isToggled(M_SOUND)) { sounds.enabled = !sounds.enabled; if (!sounds.enabled) sounds.stop(); }
-    if (music.enabled != optionsMenu.isToggled(M_MUSIC)) music.setEnabled(!music.enabled);
+
+    ramSaver = optionsMenu.isToggled(M_RAM);
+
     showFps = optionsMenu.isToggled(M_FPS);
     if (showTouch != optionsMenu.isToggled(M_TOUCH)) { showTouch = !showTouch; setLayout(landscape); }
     if (landscape != optionsMenu.isToggled(M_LANDSCAPE)) setLayout(!landscape);
@@ -361,7 +479,7 @@ final class Game extends GameCanvas implements Runnable {
     m.action(menuAction(ev), now);
     if (m == mainMenu) {
       switch (mainMenu.check()) {
-        case M_START: updateSlots(); break;
+        case M_START: curStart = 0; updateSlots(); break;
         case M_CONTROLS: state = CONTROLS; break;
         case M_CONTRIB: generateContrib(); break;
         case M_EDITOR: openEditor(); break;
@@ -375,33 +493,45 @@ final class Game extends GameCanvas implements Runnable {
     else if (m == keysMenu) keysChanged();
     else if (m == contribSubsetMenu) {
       int n = contribSubsetMenu.check();
-      if (n >= 1) {
+      if (n == M_STORY) {
+        int pack = Editor.indexOf(Editor.PACK_DIRS, contribSubsets[contribSubset]);
+        if (pack >= 0) showText(Editor.PACK_STORY[pack], Pic.BG_OILTUX, 1.0f, AFTER_TITLE);
+      } else if (n >= 1) {
         singleLevel = true; worldmap = null; resetStatus();
         startLevel(Editor.levelId(contribSubsets[contribSubset], n));
       }
     }
+    else if (m == adventureMenu) {      // which world's save slots Start Game shows
+      int c = adventureMenu.check();
+      if (c >= 300) { curStart = c - 300; updateSlots(); }
+    }
     else if (m == loadGameMenu) {
       int slot = loadGameMenu.check();
       if (slot >= 1 && slot <= 5 && loadGameMenu.kind[loadGameMenu.find(slot)] == Menu.ACTION) {
-        loadingSave = "slot" + slot; loadingMap = 0;
-        if (WorldMap.read(loadingSave) == null) showText("/x/intro.txt", Pic.BG_ARCTIS2, 1.0f, AFTER_WORLDMAP);
+        loadingSave = startSave[curStart] + slot; loadingMap = startMap[curStart];
+        if (WorldMap.read(loadingSave) == null) showText(startIntro[curStart], Pic.BG_ARCTIS2, 1.0f, AFTER_WORLDMAP);
         else startLoading();
       }
     } else if (m == contribMenu) {
       int c = contribMenu.check();
-      if (c == 1 || c == 2) { loadingSave = "bonusisland" + c; loadingMap = c; startLoading(); }
+      if (c >= 1 && c <= bonusMap.length) {
+        loadingMap = bonusMap[c - 1]; loadingSave = "bonusisland" + loadingMap; startLoading();
+      }
       if (c >= 100) {               // check_contrib_menu: the subset's levels
         contribSubset = c - 100;
         String sub = contribSubsets[contribSubset];
         contribSubsetMenu.clear();
         contribSubsetMenu.add(Menu.LABEL, Editor.subsetTitle(sub), 0).add(Menu.HL, "", 0);
+        int pack = Editor.indexOf(Editor.PACK_DIRS, sub);
+        if (pack >= 0 && Editor.PACK_STORY[pack] != null) contribSubsetMenu.add(Menu.ACTION, "The Story", M_STORY);
         int n = Editor.subsetLevels(sub);
-        for (int i = 1; i <= n; i++) contribSubsetMenu.add(Menu.ACTION, Editor.levelName(Editor.levelId(sub, i)), i);
+        for (int i = 1; i <= n; i++)
+          contribSubsetMenu.add(Menu.ACTION, fitName(Editor.levelName(Editor.levelId(sub, i)), sw / 8 - 1), i);
         contribSubsetMenu.add(Menu.HL, "", 0).add(Menu.BACK, "Back", 0);
       }
     } else if (m == confirmMenu) {
       int c = confirmMenu.check();
-      if (c == M_YES) WorldMap.delete("slot" + confirmSlot);
+      if (c == M_YES) WorldMap.delete(startSave[curStart] + confirmSlot);
       if (c == M_YES || c == M_NO) { updateSlots(); Menu.setCurrent(mainMenu, now); }
     }
   }
@@ -581,22 +711,31 @@ final class Game extends GameCanvas implements Runnable {
 
   void loadLevel(boolean intro) {
     float oldX = level != null && tux.dying != Player.DYING_NOT ? tux.x : -1;
+    if (ramSaver) {                    // let go of everything the level doesn't need before loading it
+      level = null; tcLevel = null; tc = null; tcG = null;
+      bgImage = null; bgTall = null;     // the sky colour (skyColor, bgImageNo) stays
+      if (!demo) logoImg = null;
+      numbersImg = null; textImg = null; textTall = null; textImgNo = -1;
+      System.gc();
+    }
     try {
       level = testLevel != null ? new Level(testLevel) : Level.load(levelId);
     } catch (Exception e) {
       state = ERROR; message = "Level " + levelId + ": " + e; return;
     }
-    if (level.background != 255 && level.background != bgImageNo) {
-      bgImage = null;
+    boolean keepBg = detail == FULL && !ramSaver;   // Low, Potato and RAM saver only need its colour
+    if (level.background != 255 && (level.background != bgImageNo || (keepBg && bgImage == null))) {
+      bgImage = null; bgTall = null;
       try {
         bgImage = Image.createImage("/b/" + level.background + ".png");
         int[] px = new int[1];
         bgImage.getRGB(px, 0, 1, 0, 0, 1, 1);
         skyColor = px[0] & 0xffffff;
-      } catch (Exception e) { bgImage = null; }
+      } catch (Exception e) { bgImage = null; skyColor = level.topColor; }
       bgImageNo = level.background;
-      bgTall = bgImage != null ? tall(bgImage, 80) : null;
+      bgTall = keepBg && bgImage != null ? tall(bgImage, 80) : null;
     }
+    if (!keepBg) { bgImage = null; bgTall = null; }
     if (level.background == 255) { bgImage = null; bgImageNo = -1; skyColor = level.topColor; }
     tux.init(level);
     if (!demo) applyBonus();
@@ -604,7 +743,7 @@ final class Game extends GameCanvas implements Runnable {
       // respawn at the nearest reset point behind Tux
       int bx = -1, by = -1;
       for (int i = 0; i < level.resetX.length; i++)
-        if (level.resetX[i] - 320 < oldX && bx < level.resetX[i]) { bx = level.resetX[i]; by = level.resetY[i]; }
+        if ((level.resetX[i] & 0xffff) - 320 < oldX && bx < (level.resetX[i] & 0xffff)) { bx = level.resetX[i] & 0xffff; by = level.resetY[i]; }
       if (bx != -1) { tux.x = bx; tux.y = by; tux.syncOld(); scrollX = bx - 320; }
       else scrollX = 0;
     } else scrollX = 0;
@@ -613,7 +752,7 @@ final class Game extends GameCanvas implements Runnable {
     endSequence = 0;
     badguys.removeAllElements(); items.removeAllElements(); bullets.removeAllElements();
     for (int i = 0; i < level.objKind.length; i++)
-      addBadGuy(level.objX[i], level.objY[i], level.objKind[i], level.objStay[i] != 0);
+      addBadGuy(level.objX[i] & 0xffff, level.objY[i], level.objKind[i], level.objStay[i] != 0);
     for (int i = 0; i < NE; i++) { bdOn[i] = false; bbOn[i] = false; pbEnd[i] = 0; fsEnd[i] = 0; }
     initParticles();
     music.song = level.music;
@@ -814,8 +953,9 @@ final class Game extends GameCanvas implements Runnable {
     for (int i = 0; i < bullets.size(); i++) ((Bullet) bullets.elementAt(i)).action(fr);
     for (int i = 0; i < items.size(); i++) ((Item) items.elementAt(i)).action(fr);
     for (int i = 0; i < badguys.size(); i++) ((BadGuy) badguys.elementAt(i)).action(fr);
-    // particles
-    if (ptKind == 2) {
+    // particles (not drawn below Full detail, so not moved either)
+    if (detail != FULL) { }
+    else if (ptKind == 2) {
       for (int i = 0; i < ptCount; i++) {
         ptY[i] += ptSpeed[i] * fr;
         if (ptY[i] > 480) { ptY[i] = ptY[i] % 480; ptX[i] = Math.abs(rnd.nextInt()) % 1280; }
@@ -1065,13 +1205,39 @@ final class Game extends GameCanvas implements Runnable {
     return -1;
   }
 
+  // Portrait below Full: the buttons sit under the level on a plain sky fill, so they are drawn once
+  // into an image and only redrawn when a different button is held or the sky colour changes.
+  // Landscape (over the level) in Potato: outlines and labels only, no see-through fills.
+  Image touchImg; int touchImgKey = -1;
+
   void drawTouch(Graphics g) {
+    int pressed = 0;
+    for (int i = 0; i < 8; i++)
+      if ((touchKeys & T_BITS[i]) == T_BITS[i] && touchKeys != 0 && touchButton(lastTouchX, lastTouchY) == i) pressed |= 1 << i;
+    if (!landscape && detail != FULL) {
+      int h = touchRect(6)[3], y0 = sh - h, sky = skyFill();
+      int key = pressed ^ (sky << 8);
+      if (touchImg == null || touchImg.getWidth() != sw || touchImg.getHeight() != h) { touchImg = Image.createImage(sw, h); touchImgKey = -1; }
+      if (key != touchImgKey) {
+        Graphics tg = touchImg.getGraphics();
+        tg.setColor(sky); tg.fillRect(0, 0, sw, h);
+        tg.translate(0, -y0);
+        drawButtons(tg, pressed, false);
+        touchImgKey = key;
+      }
+      g.drawImage(touchImg, 0, y0, Graphics.TOP | Graphics.LEFT);
+      return;
+    }
+    drawButtons(g, pressed, landscape && detail == POTATO);
+  }
+
+  void drawButtons(Graphics g, int pressed, boolean plain) {
     for (int i = 0; i < 8; i++) {
       int[] r = touchRect(i);
-      boolean on = (touchKeys & T_BITS[i]) == T_BITS[i] && touchKeys != 0 && touchButton(lastTouchX, lastTouchY) == i;
-      Res.fillAlpha(g, r[0], r[1], r[2], r[3], on ? 0xa0ffffff : i < 6 ? 0x508080b4 : i == 6 ? 0x5080b480 : 0x50b48080);
-      g.setColor(0xffffff); g.drawRect(r[0], r[1], r[2] - 1, r[3] - 1);
-      Res.textCentered(g, Res.WHITE, T_LABEL[i], r[0] + r[2] / 2, r[1] + (r[3] - 9) / 2, 1);
+      boolean on = (pressed & (1 << i)) != 0;
+      if (!plain) Res.fillAlpha(g, r[0], r[1], r[2], r[3], on ? 0xa0ffffff : i < 6 ? 0x508080b4 : i == 6 ? 0x5080b480 : 0x50b48080);
+      g.setColor(plain && on ? 0xffff00 : 0xffffff); g.drawRect(r[0], r[1], r[2] - 1, r[3] - 1);
+      Res.textCentered(g, Res.WHITE, T_LABEL[i], r[0] + r[2] / 2, r[1] + (r[3] - 9) / 2, plain ? 0 : 1);
     }
   }
   int lastTouchX = -1, lastTouchY = -1;
@@ -1166,7 +1332,8 @@ final class Game extends GameCanvas implements Runnable {
         fpsCount = 0; fpsT = t0;
       }
       long spent = System.currentTimeMillis() - t0;
-      if (spent < 30) { try { Thread.sleep(30 - spent); } catch (InterruptedException e) { } }
+      int frameMs = FPSCAP_MS[fpsCap];
+      if (spent < frameMs) { try { Thread.sleep(frameMs - spent); } catch (InterruptedException e) { } }
     }
   }
 
@@ -1317,7 +1484,7 @@ final class Game extends GameCanvas implements Runnable {
       g.setColor(0); g.fillRect(0, 0, sw, sh);
       int y = sh / 4;
       Res.textCentered(g, Res.GOLD, "SuperTux 0.1.3", sw / 2, y, 1);
-      Res.textCentered(g, Res.WHITE, "J2ME Beta Release 1.1", sw / 2, y + 12, 1);
+      Res.textCentered(g, Res.WHITE, "J2ME " + RELEASE, sw / 2, y + 12, 1);
       centeredWrapped(g, Res.WHITE, "This program comes with ABSOLUTELY NO WARRANTY. It is free software, and you are welcome to redistribute it under the GNU GPL version 2. See COPYING for details.", sw / 2, y + 35, 11);
       return;
     }
@@ -1335,17 +1502,26 @@ final class Game extends GameCanvas implements Runnable {
       return;
     }
     if (level == null) { g.setColor(0); g.fillRect(0, 0, sw, sh); return; }
+    // portrait with touch buttons: the level sits above them while playing; the title screen has no
+    // buttons, so its demo level stays centred like without touch
+    if (!landscape) viewTop = showTouch && state != TITLE ? 64 : 160;
     if (state == INTRO || state == GAMEOVER) { screens(g); return; }
     drawWorld(g);
     if (state == TITLE) {
       if (Menu.current == mainMenu) {
         g.drawImage(logo(), landscape ? 80 : 40, landscape ? 8 : 24, Graphics.TOP | Graphics.LEFT);
         String[] c = landscape
-            ? new String[] { " SuperTux 0.1.3 - Beta Release 1.1", "Made by SuperTux Devel Team",
+            ? new String[] { " SuperTux 0.1.3 - " + RELEASE, "Made by SuperTux Devel Team",
                 "Originally ported by Lars 'Anotherguest'", "2026 J2ME port", "by Jecka22LR" }
-            : new String[] { " SuperTux 0.1.3 - J2ME", "Beta Release 1.1", "Made by SuperTux Devel Team",
+            : new String[] { " SuperTux 0.1.3 - J2ME", RELEASE, "Made by SuperTux Devel Team",
                 "Originally ported by", "Lars 'Anotherguest'", "2026 J2ME port by Jecka22LR" };
-        int y0 = landscape ? 392 : 535;
+        if (titleNote != null) {          // an edition's own line on top (x/g.txt T|...)
+          String[] c2 = new String[c.length + 1];
+          c2[0] = " " + titleNote;
+          System.arraycopy(c, 0, c2, 1, c.length);
+          c = c2;
+        }
+        int y0 = (landscape ? 392 : 535) - (c.length - (landscape ? 5 : 6)) * 17;
         for (int i = 0; i < c.length; i++) Res.chars(g, Res.WHITE, c[i], 0, (y0 + 17 * i) / 2);
       }
     } else {
@@ -1358,7 +1534,7 @@ final class Game extends GameCanvas implements Runnable {
   // a short fade in from black when the screen changes (0.1.3's screens cut over with "Loading...")
   void fade(Graphics g) {
     long t = System.currentTimeMillis() - fadeStart;
-    if (t >= 0 && t < 300) Res.fillAlpha(g, 0, 0, sw, sh, (int) (255 * (300 - t) / 300) << 24);
+    if (detail != POTATO && t >= 0 && t < 300) Res.fillAlpha(g, 0, 0, sw, sh, (int) (255 * (300 - t) / 300) << 24);
   }
 
   // save_hs: "Congratulations", the score in the big yellow numbers, and the name
@@ -1402,23 +1578,33 @@ final class Game extends GameCanvas implements Runnable {
   }
 
   void drawWorld(Graphics g) {
-    background(g, scrollX);
     int sx0 = (int) scrollX;
     int top = viewTop >> 1;
-    particles(g, 0);
     int col0 = (sx0 >> 5) - 4, col1 = (sx0 + viewW) >> 5;
     int ox = -(sx0 >> 1);
-    drawLayer(g, level.bg, col0, col1, ox, top, false);
-    drawLayer(g, level.ia, col0, col1, ox, top, true);
-    for (int i = 0; i < NE; i++) if (bbOn[i])
+    if (detail == POTATO) {
+      // the cache covers the level's rows: only the sky above and below it needs filling
+      int sky = skyFill();
+      g.setColor(sky);
+      if (top > 0) g.fillRect(0, 0, sw, top);
+      int bot = top + (Level.H << 4);
+      if (bot < sh) g.fillRect(0, bot, sw, sh - bot);
+      drawCached(g, sx0, top, sky);
+    } else {
+      background(g, scrollX);
+      if (detail == FULL) particles(g, 0);
+      drawLayer(g, level.bg, col0, col1, ox, top, false);
+      drawLayer(g, level.ia, col0, col1, ox, top, true);
+    }
+    if (detail != POTATO) for (int i = 0; i < NE; i++) if (bbOn[i])
       Res.drawTile(g, bbTile[i], ((int) bbX[i] - sx0) >> 1, ((int) (bbY[i] + bbOff[i]) + viewTop) >> 1, frameCounter);
     for (int i = 0; i < badguys.size(); i++) ((BadGuy) badguys.elementAt(i)).draw(g);
     tux.draw(g);
     for (int i = 0; i < bullets.size(); i++) ((Bullet) bullets.elementAt(i)).draw(g);
-    for (int i = 0; i < NE; i++) if (fsEnd[i] != 0)
+    if (detail != POTATO) for (int i = 0; i < NE; i++) if (fsEnd[i] != 0)
       Res.text(g, Res.GOLD, fsText[i], ((int) fsX[i] >> 1) + 8 - fsText[i].length() * 4, ((int) fsY[i] + viewTop) >> 1);
     for (int i = 0; i < items.size(); i++) ((Item) items.elementAt(i)).draw(g);
-    for (int i = 0; i < NE; i++) {
+    if (detail != POTATO) for (int i = 0; i < NE; i++) {
       if (bdOn[i] && coinTile >= 0)
         Res.drawTile(g, coinTile, ((int) bdX[i] - sx0) >> 1, ((int) bdY[i] + viewTop) >> 1, 0);
       if (pbEnd[i] != 0) {
@@ -1429,14 +1615,82 @@ final class Game extends GameCanvas implements Runnable {
       }
     }
     drawLayer(g, level.fg, col0, col1, ox, top, false);
-    particles(g, 1);
+    if (detail == FULL) particles(g, 1);
     g.setClip(0, 0, sw, sh);
   }
 
   Image bgTall;          // portrait: the background with a taller sky, filling the screen
 
+  // the sky colour Low and Potato fill with (the top of the level's picture, or its gradient's top)
+  int skyFill() { return bgImageNo >= 0 ? skyColor : level.topColor; }
+
+  // Potato tile cache: the background and interactive layers, over the sky colour, kept in an
+  // offscreen ring of 16-pixel columns (column c lives at (c % tcN) * 16). Each frame is one or two
+  // blits plus the few columns that scrolled into view, instead of a draw per visible tile. Any
+  // change to the interactive tiles (Level.changes), a new level or sky colour redraws it all.
+  Image tc; Graphics tcG; int tcN, tcFirst, tcLast = -1, tcChanges, tcSky; Level tcLevel;
+
+  void drawCached(Graphics g, int sx0, int top, int sky) {
+    int c0 = Math.max(0, sx0 >> 5), c1 = (sx0 + viewW - 1) >> 5;
+    int n = c1 - c0 + 1, h = Level.H << 4;
+    if (tc == null || tcN < n) {
+      tc = null; tcG = null;
+      tcN = n + 1;
+      tc = Image.createImage(tcN << 4, h);
+      tcG = tc.getGraphics();
+      tcLast = -1;
+    }
+    if (tcLevel != level || tcSky != sky) {
+      tcLevel = level; tcSky = sky; tcLast = -1;
+    } else if (tcChanges != level.changes && tcLast >= 0) {
+      // a coin, brick or bonus block changed: redraw just those columns (and up to 7 to their right,
+      // which a wide tile there could reach into)
+      int a = Math.max(level.chMin, tcFirst), b = Math.min(level.chMax + 7, tcLast);
+      for (int c = a; c <= b; c++) cacheColumn(c, sky);
+    }
+    tcChanges = level.changes; level.chMin = Integer.MAX_VALUE; level.chMax = -1;
+    for (int c = c0; c <= c1; c++)
+      if (tcLast < 0 || c < tcFirst || c > tcLast) cacheColumn(c, sky);
+    tcFirst = c0; tcLast = c1;
+    int slot = c0 % tcN, x = (c0 << 4) - (sx0 >> 1);
+    int w1 = Math.min(n, tcN - slot);
+    g.drawRegion(tc, slot << 4, 0, w1 << 4, h, 0, x, top, Graphics.TOP | Graphics.LEFT);
+    if (w1 < n) g.drawRegion(tc, 0, 0, (n - w1) << 4, h, 0, x + (w1 << 4), top, Graphics.TOP | Graphics.LEFT);
+  }
+
+  // one column, drawn like drawLayer would (bg then ia, rows top to bottom) but clipped to the
+  // column; tiles up to 8 columns to the left can be wide enough to reach into it
+  void cacheColumn(int c, int sky) {
+    int x = (c % tcN) << 4, h = Level.H << 4, w = level.width;
+    tcG.setClip(x, 0, 16, h);
+    tcG.setColor(sky);
+    tcG.fillRect(x, 0, 16, h);
+    int a = Math.max(0, c - 7), b = Math.min(c, w - 1);
+    for (int l = 0; l < 2; l++) {
+      byte[] map = l == 0 ? level.bg : level.ia;
+      for (int y = 0; y < Level.H; y++) {
+        int row = y * w;
+        for (int cx = a; cx <= b; cx++) {
+          int t = map[row + cx] & 0xff;
+          if (t == 0) continue;
+          if (cx < c) {
+            short[] fr = Res.tFrames[t];
+            if (fr.length == 0 || ((cx - c) << 4) + (Res.tfw[fr[0]] & 0xff) <= 0) continue;
+          }
+          Res.drawTile(tcG, t, x + ((cx - c) << 4), y << 4, 0);
+        }
+      }
+    }
+  }
+
   void background(Graphics g, float sx) {
     int top = viewTop >> 1;
+    // Low and Potato, or a picture RAM saver (or a switch to Full mid-level) left unloaded: one fill
+    if (detail != FULL || (bgImage == null && bgImageNo >= 0)) {
+      g.setColor(skyFill());
+      g.fillRect(0, 0, sw, sh);
+      return;
+    }
     if (bgImage != null) {
       Image im = top > 0 && bgTall != null ? bgTall : bgImage;
       int y0 = im == bgTall ? 0 : top;
@@ -1478,8 +1732,8 @@ final class Game extends GameCanvas implements Runnable {
       for (int x = col0; x <= col1; x++) {
         int t = map[row + x] & 0xff;
         if (t == 0) continue;
-        if (ia && bouncing(x, y)) continue;
-        Res.drawTile(g, t, ox + (x << 4), top + (y << 4), frameCounter);
+        if (ia && detail != POTATO && bouncing(x, y)) continue;
+        Res.drawTile(g, t, ox + (x << 4), top + (y << 4), detail == POTATO ? 0 : frameCounter);
       }
     }
   }
@@ -1491,28 +1745,38 @@ final class Game extends GameCanvas implements Runnable {
   }
 
   // GameSession::drawstatus at 320x240; portrait puts the right half on a second row
+  // the HUD's numbers as strings, remade only when they change (not a new String every frame);
+  // Potato draws the HUD without the half-transparent shadow
+  int[] hudVal = { -1, -1, -1, -1 }; String[] hudStr = new String[4];
+  String num(int slot, int v, String prefix) {
+    if (hudVal[slot] != v || hudStr[slot] == null) { hudVal[slot] = v; hudStr[slot] = prefix + v; }
+    return hudStr[slot];
+  }
+  void hud(Graphics g, int font, String s, int x, int y) { Res.text(g, font, s, x, y, detail == POTATO ? 0 : 1); }
+
   void status(Graphics g) {
     int tl = (int) ((timeEnd - now) / 1000);
     if (tl < 0) tl = 0;
-    Res.text(g, Res.WHITE, "SCORE", 0, 0);
-    Res.text(g, Res.GOLD, String.valueOf(score), 48, 0);
-    int tx = landscape ? 112 : 168;
-    if (endSequence == 0 && now >= timeEnd) Res.text(g, Res.WHITE, "TIME'S UP", landscape ? 112 : 152, 0);
+    hud(g, Res.WHITE, "SCORE", 0, 0);
+    hud(g, Res.GOLD, num(0, score, ""), 48, 0);
+    int rx = sw - 88;                  // portrait: TIME and LIVES share a right-hand column (fits x99)
+    int tx = landscape ? 112 : rx;
+    if (endSequence == 0 && now >= timeEnd) hud(g, Res.WHITE, "TIME'S UP", landscape ? 112 : rx, 0);
     else if (endSequence != 0 || timeEnd - now > TIME_WARNING || (frameCounter % 10) < 5) {
-      Res.text(g, Res.WHITE, "TIME", tx, 0);
-      Res.text(g, Res.GOLD, String.valueOf(tl), tx + 40, 0);
+      hud(g, Res.WHITE, "TIME", tx, 0);
+      hud(g, Res.GOLD, num(1, tl, ""), tx + 40, 0);
     }
     int cx = landscape ? 240 : 0, cy = landscape ? 0 : 10;
-    Res.text(g, Res.WHITE, "COINS", cx, cy);
-    Res.text(g, Res.GOLD, String.valueOf(distros), cx + 64, cy);
-    int lx = landscape ? 240 : 128;
-    Res.text(g, Res.WHITE, "LIVES", lx, 10);
+    hud(g, Res.WHITE, "COINS", cx, cy);
+    hud(g, Res.GOLD, num(2, distros, ""), cx + 48, cy);   // same column as the score
+    int lx = landscape ? 240 : rx;
+    hud(g, Res.WHITE, "LIVES", lx, 10);
     drawLives(g, lx, 10);
-    if (testMode) Res.text(g, Res.WHITE, "Press Softkey To Return", 0, sh - 10);
+    if (testMode) hud(g, Res.WHITE, "Press Softkey To Return", 0, sh - 10);
     else if (showFps) {                // under the score
       int fy = landscape ? 10 : 20;
-      Res.text(g, Res.WHITE, "FPS", 0, fy);
-      Res.text(g, Res.GOLD, fpsText, 32, fy);
+      hud(g, Res.WHITE, "FPS", 0, fy);
+      hud(g, Res.GOLD, fpsText, 32, fy);
     }
   }
 
@@ -1520,12 +1784,12 @@ final class Game extends GameCanvas implements Runnable {
   void drawLives(Graphics g, int lx, int y) {
     if (!landscape) {                  // portrait: LIVES, one Tux centred on the text line, then x<lives>
       Res.drawSpriteTL(g, Spr.TUX_LIFE, lx + 44, y - 4);
-      Res.text(g, Res.GOLD, "x" + Math.max(0, lives), lx + 62, y);
+      hud(g, Res.GOLD, num(3, Math.max(0, lives), "x"), lx + 62, y);
       return;
     }
     if (lives >= 5) {
       String s = lives + "x";
-      Res.text(g, Res.GOLD, s, lx + 63 - s.length() * 8, y);
+      hud(g, Res.GOLD, s, lx + 63 - s.length() * 8, y);
       Res.drawSpriteTL(g, Spr.TUX_LIFE, lx + 61, y);
     } else for (int i = 0; i < lives; ++i) Res.drawSpriteTL(g, Spr.TUX_LIFE, lx + (565 + 9 * i) / 2 - 240, y);
   }
@@ -1551,6 +1815,14 @@ final class Game extends GameCanvas implements Runnable {
     String[] l = wrap(t, sw / 8);
     for (int i = 0; i < l.length; i++) Res.textCentered(g, font, l[i], cx, y + i * lineH);
     return l.length;
+  }
+
+  // a level title short enough for one menu line: drop a "Level 11:" style prefix, then cut
+  static String fitName(String t, int max) {
+    if (t.length() <= max) return t;
+    int colon = t.indexOf(": ");
+    if (colon > 0 && colon < 14) t = t.substring(colon + 2);
+    return t.length() <= max ? t : t.substring(0, max - 2) + "..";
   }
 
   static String[] wrap(String t, int max) {

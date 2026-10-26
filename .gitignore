@@ -14,3 +14,4 @@ tools/__pycache__/
 *.rnd
 *.sis
 *.sisx
+/res-atnw-only.txt

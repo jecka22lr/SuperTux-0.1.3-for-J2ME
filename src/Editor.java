@@ -16,7 +16,20 @@ final class Editor {
   static final int SM_CURSOR = 0, SM_SQUARE = 1;
   static final String[] KIND_NAMES = { "mriceblock", "jumpy", "mrbomb", "stalactite", "flame", "fish",
       "bouncingsnowball", "flyingsnowball", "spiky", "snowball", "bomb" };
-  static final String[] BUILTIN = { "world1", "bonus1", "bonus2" };
+  // the built-in level subsets and their level ids (a1, b1, c1...); the community packs are added
+  // from x/g.txt (Game.loadWorlds) and also listed under Bonus Levels
+  static String[] BUILTIN = { "world1", "bonus1", "bonus2" };
+  static String BUILTIN_LETTERS = "abc";
+  static String[] PACK_DIRS = new String[0], PACK_TITLES = new String[0], PACK_AUTHORS = new String[0],
+      PACK_STORY = new String[0];
+
+  static void setPacks(String[] dirs, String letters, String[] titles, String[] authors, String[] story) {
+    PACK_DIRS = dirs; PACK_TITLES = titles; PACK_AUTHORS = authors; PACK_STORY = story;
+    String[] b = new String[3 + dirs.length];
+    b[0] = "world1"; b[1] = "bonus1"; b[2] = "bonus2";
+    System.arraycopy(dirs, 0, b, 3, dirs.length);
+    BUILTIN = b; BUILTIN_LETTERS = "abc" + letters;
+  }
 
   final Game game;
   // subset and level
@@ -152,7 +165,7 @@ final class Editor {
 
   static String levelId(String sub, int n) {
     int b = indexOf(BUILTIN, sub);
-    if (b >= 0) return "abc".charAt(b) + "" + n;
+    if (b >= 0) return BUILTIN_LETTERS.charAt(b) + "" + n;
     return "u" + indexOf(subsets(), sub) + "_" + n;
   }
 
@@ -171,6 +184,8 @@ final class Editor {
         return new String[] { in.readUTF(), in.readUTF() };
       } catch (Exception e) { }
     }
+    int p = indexOf(PACK_DIRS, sub);
+    if (p >= 0) return new String[] { PACK_TITLES[p], "by " + PACK_AUTHORS[p] };
     return new String[] { sub, "" };
   }
 
@@ -202,7 +217,7 @@ final class Editor {
     } catch (Exception e) { lv = new Level(); }
     levelNo = n;
     bad.removeAllElements();
-    for (int i = 0; i < lv.objKind.length; i++) bad.addElement(new int[] { lv.objKind[i], lv.objX[i], lv.objY[i], lv.objStay[i] });
+    for (int i = 0; i < lv.objKind.length; i++) bad.addElement(new int[] { lv.objKind[i], lv.objX[i] & 0xffff, lv.objY[i], lv.objStay[i] });
     changed = false; selected = -1;
     levelInfoEnd = System.currentTimeMillis() + 2500;
     minimapDirty = true;

@@ -14,6 +14,9 @@ final class Music {
   private String current;
   private Hashtable alias;
   private boolean mp3Failed;
+  boolean midiOnly;         // Options > Music > MIDI: cheaper on slow phones than decoding MP3
+
+  void setMidiOnly(boolean on) { if (on != midiOnly) { midiOnly = on; stop(); } }
 
   private String resolve(String stem) {
     if (alias == null) {
@@ -68,7 +71,7 @@ final class Music {
     if (!enabled) { stop(); return; }
     if (stem.equals(current) && player != null) return;
     stop();
-    if (!mp3Failed && open("/m/" + stem + ".mp3", "audio/mpeg", loops)) { current = stem; return; }
+    if (!mp3Failed && !midiOnly && open("/m/" + stem + ".mp3", "audio/mpeg", loops)) { current = stem; return; }
     if (open("/m/" + stem + ".mid", "audio/midi", loops)) current = stem;
   }
 
