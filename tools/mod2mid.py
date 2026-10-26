@@ -72,7 +72,11 @@ def vlq(n):
     while n: out.append((n & 0x7f) | 0x80); n >>= 7
     return bytes(reversed(out))
 
-def convert(path, out, loop_once=True):
+# chiptune flavour (convert.py's default; CHIP=0 in its environment turns it off): every melodic instrument becomes a square
+# lead, or a synth bass when it plays low, each on its own channel, played softer; drums stay drums
+CHIP_LEAD, CHIP_BASS = 80, 38
+
+def convert(path, out, loop_once=True, chip=False):
     x = load(path)                 # XM, Protracker MOD or Impulse Tracker IT
     # notes used per instrument
     used = {}
@@ -91,18 +95,25 @@ def convert(path, out, loop_once=True):
         notes = sorted(used[i]); rep = notes[len(notes) // 2]
         off = pitch_offset(ins, rep, named) if kind[0] == 'prog' else 0
         vol = max(s['vol'] for s in ins['samples'])
+        if chip and kind[0] == 'prog':
+            low = notes[len(notes) // 2] - 1 + 12 + off < 48
+            kind = ('prog', CHIP_BASS if low else CHIP_LEAD, i)   # the instrument number keeps its own channel
         imap[i] = (kind, off, vol)
     # MIDI channel per GM program (drums on 9)
     chan = {}
     free = [c for c in range(16) if c != 9]
     for i, (kind, off, vol) in sorted(imap.items()):
-        if kind[0] == 'prog' and kind[1] not in chan:
-            chan[kind[1]] = free.pop(0) if free else 0
+        key = kind[1:] if chip else kind[1]
+        if kind[0] == 'prog' and key not in chan:
+            chan[key] = free.pop(0) if free else 0
+    def ch_of(kind): return chan[kind[1:] if chip else kind[1]]
+    prog_of = {c: (k[0] if chip else k) for k, c in chan.items()}
 
     events = []   # (tick, order, bytes)
     def ev(t, b, o=1): events.append((t, o, bytes(b)))
-    for p, c in chan.items(): ev(0, [0xC0 | c, p], 0)
-    for c in list(chan.values()) + [9]: ev(0, [0xB0 | c, 7, 110], 0)
+    for c, p in prog_of.items(): ev(0, [0xC0 | c, p], 0)
+    for c in list(chan.values()) + [9]: ev(0, [0xB0 | c, 7, 100 if chip else 110], 0)
+    soft = 0.85 if chip else 1.0
 
     speed, bpm = x.tempo or 6, x.bpm or 125
     ev(0, [0xFF, 0x51, 3] + list(struct.pack('>I', int(60000000 / bpm))[1:]), 0)
@@ -148,11 +159,11 @@ def convert(path, out, loop_once=True):
             if 0 < n < 97 and ins in imap and e != 0x03 and e != 0x05:
                 if playing[c]: ev(start, [0x80 | playing[c][0], playing[c][1], 0]); playing[c] = None
                 kind, off, _ = imap[ins]
-                vel = max(1, min(127, vols[c] * 2))
+                vel = max(1, min(127, int(vols[c] * 2 * soft)))
                 if kind[0] == 'drum':
                     ev(start, [0x99, kind[1], vel]); ev(start + 2, [0x89, kind[1], 0])
                 else:
-                    ch = chan[kind[1]]
+                    ch = ch_of(kind)
                     note = max(0, min(127, n - 1 + 12 + off))
                     ev(start, [0x90 | ch, note, vel])
                     playing[c] = (ch, note)
@@ -162,7 +173,7 @@ def convert(path, out, loop_once=True):
                 kind, off, _ = imap[ins]
                 note = max(0, min(127, n - 1 + 12 + off))
                 ch = playing[c][0]
-                ev(t + speed - 1, [0x80 | ch, playing[c][1], 0]); ev(t + speed - 1, [0x90 | ch, note, max(1, vols[c] * 2)])
+                ev(t + speed - 1, [0x80 | ch, playing[c][1], 0]); ev(t + speed - 1, [0x90 | ch, note, max(1, int(vols[c] * 2 * soft))])
                 playing[c] = (ch, note)
             # arpeggio 0xy on a sounding note: retrigger x/y semitones on the ticks
             if e == 0 and a and playing[c] and speed > 1:
@@ -172,7 +183,7 @@ def convert(path, out, loop_once=True):
                 for k in range(1, speed):
                     nn = max(0, min(127, base + seq[k % 3]))
                     if nn != cur:
-                        ev(t + k, [0x80 | ch, cur, 0]); ev(t + k, [0x90 | ch, nn, max(1, vols[c] * 2)])
+                        ev(t + k, [0x80 | ch, cur, 0]); ev(t + k, [0x90 | ch, nn, max(1, int(vols[c] * 2 * soft))])
                         cur = nn
                 playing[c] = (ch, cur)
             if e == 0x0E and (a >> 4) == 0x0C and playing[c]:                        # note cut

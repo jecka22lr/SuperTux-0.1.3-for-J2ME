@@ -137,7 +137,7 @@ final class Game extends GameCanvas implements Runnable {
   static final int[] FPSCAP_MS = { 30, 40, 50, 66 };
   int fpsCap;
   // Options > RAM saver: no level background pictures (sky colour instead, like Low), and the logo,
-  // story pictures and Potato caches are let go before each level loads
+  // story pictures and tile caches are let go before each level loads
   boolean ramSaver;
   Menu adventureMenu;
 
@@ -911,6 +911,7 @@ final class Game extends GameCanvas implements Runnable {
     for (int i = 0; i < NE; i++) if (!bbOn[i]) {
       bbOn[i] = true; bbX[i] = bx; bbY[i] = by; bbOff[i] = 0; bbM[i] = -0.9f;
       bbTile[i] = level.tileAtPos(bx, by);
+      level.mark((int) bx >> 5);       // the cache leaves the brick out while it bounces
       break;
     }
     sound(SND_BRICK);
@@ -946,7 +947,7 @@ final class Game extends GameCanvas implements Runnable {
       if (bbOn[i]) {
         bbOff[i] += bbM[i] * fr;
         if (bbOff[i] < -8) bbM[i] = 0.9f;
-        if (bbOff[i] >= 0) bbOn[i] = false;
+        if (bbOff[i] >= 0) { bbOn[i] = false; level.mark((int) bbX[i] >> 5); }
       }
       if (fsEnd[i] != 0) { fsY[i] -= 2 * fr; if (now >= fsEnd[i]) fsEnd[i] = 0; }
     }
@@ -1242,6 +1243,15 @@ final class Game extends GameCanvas implements Runnable {
   }
   int lastTouchX = -1, lastTouchY = -1;
 
+  // the MENU box while playing with Show touch: right edge, under the HUD
+  static final int MENU_Y = 22, MENU_H = 14;
+  boolean inMenuCorner(int x, int y) { return x >= sw - 48 && y >= MENU_Y - 4 && y < MENU_Y + MENU_H + 4; }
+  void drawMenuCorner(Graphics g) {
+    if (detail == POTATO) { g.setColor(0xffffff); g.drawRect(sw - 48, MENU_Y, 47, MENU_H - 1); }
+    else Res.fillAlpha(g, sw - 48, MENU_Y, 48, MENU_H, 0x508080b4);
+    Res.textCentered(g, Res.WHITE, "MENU", sw - 24, MENU_Y + 3, detail == POTATO ? 0 : 1);
+  }
+
   // one finger: turns taps into the same presses and held keys the keypad gives
   int touch(int type, int x, int y) {
     lastTouchX = x; lastTouchY = y;
@@ -1259,10 +1269,11 @@ final class Game extends GameCanvas implements Runnable {
     }
     switch (state) {
       case PLAY: {
-        int b = showTouch ? touchButton(x, y) : -1;
-        if (b >= 0) { touchKeys = T_BITS[b]; return 0; }
-        touchKeys = 0;
-        return type == T_PRESS ? K_ESC | K_SOFT | K_ANY : 0;     // elsewhere: the pause menu, like Symbian
+        if (!showTouch) return type == T_PRESS ? K_ESC | K_SOFT | K_ANY : 0;   // no buttons: any tap pauses
+        if (type == T_PRESS && inMenuCorner(x, y)) { touchKeys = 0; return K_ESC | K_SOFT | K_ANY; }
+        int b = touchButton(x, y);
+        touchKeys = b >= 0 ? T_BITS[b] : 0;   // a stray tap on the level does nothing (no accidental pauses)
+        return 0;
       }
       case WORLDMAP: {
         int tx = (worldmap.posX() + worldmap.camX) / 2 + 8, ty = (worldmap.posY() + worldmap.camY) / 2 + 3;
@@ -1528,7 +1539,10 @@ final class Game extends GameCanvas implements Runnable {
       status(g);
       // the buttons stay while paused too: the level sits above them, so without them their space
       // would be an empty strip (the menu is drawn over them and takes the taps)
-      if (showTouch && state == PLAY) drawTouch(g);
+      if (showTouch && state == PLAY) {
+        drawTouch(g);
+        if (Menu.current == null) drawMenuCorner(g);
+      }
     }
     if (Menu.current != null) Menu.current.draw(g, sw / 2, sh, !landscape, now);
   }
@@ -1584,14 +1598,16 @@ final class Game extends GameCanvas implements Runnable {
     int top = viewTop >> 1;
     int col0 = (sx0 >> 5) - 4, col1 = (sx0 + viewW) >> 5;
     int ox = -(sx0 >> 1);
-    if (detail == POTATO) {
-      // the cache covers the level's rows: only the sky above and below it needs filling
+    if (detail != FULL) {
+      // Low and Potato: the tiles come from the cache, which covers the level's rows, so only the
+      // sky above and below it needs filling; Low draws its animated tiles (coins, water) on top
       int sky = skyFill();
       g.setColor(sky);
       if (top > 0) g.fillRect(0, 0, sw, top);
       int bot = top + (Level.H << 4);
       if (bot < sh) g.fillRect(0, bot, sw, sh - bot);
       drawCached(g, sx0, top, sky);
+      if (detail == LOW) { drawAnimated(g, level.bg, col0, col1, ox, top); drawAnimated(g, level.ia, col0, col1, ox, top); }
     } else {
       background(g, scrollX);
       if (detail == FULL) particles(g, 0);
@@ -1626,11 +1642,26 @@ final class Game extends GameCanvas implements Runnable {
   // the sky colour Low and Potato fill with (the top of the level's picture, or its gradient's top)
   int skyFill() { return bgImageNo >= 0 ? skyColor : level.topColor; }
 
-  // Potato tile cache: the background and interactive layers, over the sky colour, kept in an
+  // Low: the animated tiles the cache leaves out, drawn each frame at their current frame
+  void drawAnimated(Graphics g, byte[] map, int col0, int col1, int ox, int top) {
+    int w = level.width;
+    if (col0 < 0) col0 = 0;
+    if (col1 >= w) col1 = w - 1;
+    for (int y = 0; y < Level.H; y++) {
+      int row = y * w;
+      for (int x = col0; x <= col1; x++) {
+        int t = map[row + x] & 0xff;
+        if (t == 0 || Res.tFrames[t].length < 2 || (map == level.ia && bouncing(x, y))) continue;
+        Res.drawTile(g, t, ox + (x << 4), top + (y << 4), frameCounter);
+      }
+    }
+  }
+
+  // Low and Potato tile cache: the background and interactive layers, over the sky colour, kept in an
   // offscreen ring of 16-pixel columns (column c lives at (c % tcN) * 16). Each frame is one or two
   // blits plus the few columns that scrolled into view, instead of a draw per visible tile. Any
   // change to the interactive tiles (Level.changes), a new level or sky colour redraws it all.
-  Image tc; Graphics tcG; int tcN, tcFirst, tcLast = -1, tcChanges, tcSky; Level tcLevel;
+  Image tc; Graphics tcG; int tcN, tcFirst, tcLast = -1, tcChanges, tcSky, tcDetail; Level tcLevel;
 
   void drawCached(Graphics g, int sx0, int top, int sky) {
     int c0 = Math.max(0, sx0 >> 5), c1 = (sx0 + viewW - 1) >> 5;
@@ -1642,8 +1673,8 @@ final class Game extends GameCanvas implements Runnable {
       tcG = tc.getGraphics();
       tcLast = -1;
     }
-    if (tcLevel != level || tcSky != sky) {
-      tcLevel = level; tcSky = sky; tcLast = -1;
+    if (tcLevel != level || tcSky != sky || tcDetail != detail) {
+      tcLevel = level; tcSky = sky; tcDetail = detail; tcLast = -1;
     } else if (tcChanges != level.changes && tcLast >= 0) {
       // a coin, brick or bonus block changed: redraw just those columns (and up to 7 to their right,
       // which a wide tile there could reach into)
@@ -1675,6 +1706,8 @@ final class Game extends GameCanvas implements Runnable {
         for (int cx = a; cx <= b; cx++) {
           int t = map[row + cx] & 0xff;
           if (t == 0) continue;
+          // Low: animated tiles are drawn each frame instead, and a bouncing brick is drawn moving
+          if (detail == LOW && (Res.tFrames[t].length > 1 || (l == 1 && bouncing(cx, y)))) continue;
           if (cx < c) {
             short[] fr = Res.tFrames[t];
             if (fr.length == 0 || ((cx - c) << 4) + (Res.tfw[fr[0]] & 0xff) <= 0) continue;
@@ -1774,12 +1807,14 @@ final class Game extends GameCanvas implements Runnable {
     int lx = landscape ? 240 : rx;
     hud(g, Res.WHITE, "LIVES", lx, 10);
     drawLives(g, lx, 10);
-    if (testMode) hud(g, Res.WHITE, "Press Softkey To Return", 0, sh - 10);
-    else if (showFps) {                // under the score
-      int fy = landscape ? 10 : 20;
+    int fy = landscape ? 10 : 20;
+    if (showFps) {                     // under the score
       hud(g, Res.WHITE, "FPS", 0, fy);
       hud(g, Res.GOLD, fpsText, 32, fy);
+      fy += 10;
     }
+    // the editor's test play: under the HUD (the bottom of the screen is where the touch buttons go)
+    if (testMode) hud(g, Res.WHITE, "Press Softkey To Return", 0, fy);
   }
 
   // tux_life icons as the 320x240 build places them (Surface::draw halves x: 4.5 pixels apart)

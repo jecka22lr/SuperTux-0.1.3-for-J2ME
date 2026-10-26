@@ -510,7 +510,7 @@ if len(sys.argv) > 3:
             low = os.path.basename(p).lower()
             alias.append('mid:%s=%s' % (os.path.basename(out)[:-4], 'cr' if 'credit' in low else 't' if low.startswith(('title', 'intro')) else '0'))
         else:
-            try: mod2mid.convert(p, out)
+            try: mod2mid.convert(p, out, chip=os.environ.get('CHIP', '1') != '0')   # chiptune style (CHIP=0: the older GM mapping)
             except Exception as e: print('no MIDI version of', src, '(%s: %s)' % (e.__class__.__name__, e))
         if have_ffmpeg and ext in ('.wav', '.ogg'):
             subprocess.run(['ffmpeg', '-hide_banner', '-v', 'error', '-y', '-i', p, '-ac', '1', '-ar', '22050',

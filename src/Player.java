@@ -246,11 +246,7 @@ final class Player extends Body {
         // kicking a flat bad guy doesn't hurt
       } else if (b.mode == BadGuy.KICK) {
         if (!check(invincibleT)) kill(KILL_SHRINK);
-        else {
-          b.dying = BadGuy.DYING_FALLING;
-          game.sound(Game.SND_FALL);
-          game.addScore(b.x - game.scrollX, b.y, 25 * game.scoreMultiplier);
-        }
+        else b.killMe(25);           // falls off (Potato: vanishes), like any other knocked-out bad guy
       } else {
         if (!check(invincibleT)) kill(KILL_SHRINK);
         else b.killMe(25);

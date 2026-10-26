@@ -29,11 +29,15 @@ Community levels made for 0.1.3 under Bonus Levels: Tux Strikes Back by Christia
 More options for slow phones:
 | Option | What it does |
 |---|---|
-| Detail: Low | Plain sky colour instead of the background picture, no snow or clouds |
+| Detail: Low | Plain sky colour instead of the background picture, no snow or clouds, level tiles drawn from a cached image (only coins and other animated tiles are drawn every frame) |
 | Detail: Potato | Also: tiles drawn from a cached image (only newly scrolled columns get drawn), no tile, enemy, fireball or star animations, defeated enemies vanish, no flying scores, coins or brick pieces, no fades, menu slides or HUD text shadows |
 | Music: MIDI | No MP3 decoding |
 | Sound: Fast / MIDI / Nokia | Other ways of playing sound effects, for phones whose Java freezes when one starts |
 | FPS cap | Max, 25, 20 or 15. Fewer frames leaves the phone idle time, which can smooth out sound and music |
 | RAM saver | No level background pictures, and pictures a level doesn't need are freed before it loads |
+
+The MIDI versions of the tracker songs (lite jar, Music: MIDI, phones without MP3) now have a softer chiptune sound.
+
+With Show touch on, a MENU box under the lives pauses the game; a stray tap on the level no longer does.
 
 Adventure To The New World (ATTNW) by Miksy91 is supported by the converter, but it's not in the released jars since its music and many of its backgrounds come from other games. With the mod's files, `tools/convert.py` and `build.sh` build `SuperTux.jar` (everything) and `SuperTux-ATTNW.jar` (the mod alone) yourself.

@@ -53,7 +53,10 @@ tap Tux on the map to enter, tap where to walk; the editor pointer follows the f
 Beta Release 1.2: community levels, ATTNW support (build it yourself, see above), Music MIDI, Sound
 Fast/MIDI/Nokia, Detail Low/Potato, FPS cap, RAM saver. Potato draws the tiles from a cached image
 (only columns scrolling into view are drawn), freezes enemy, fireball and star animations, makes
-defeated enemies vanish and drops the HUD's text shadow. HUD numbers line up; option values line up.
+defeated enemies vanish and drops the HUD's text shadow; Low uses the same tile cache and draws only
+animated tiles each frame. HUD numbers line up; option values line up. Chiptune-style MIDI music
+(convert.py; CHIP=0 for the older mapping), MIDI for ATTNW's MOD/IT songs. Show touch: a MENU box
+pauses, stray taps on the level don't.
 
 Layout
   src\      the game (Java 1.3 source level, CLDC 1.1 APIs only)

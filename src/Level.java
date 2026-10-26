@@ -155,14 +155,19 @@ final class Level {
 
   boolean solid(float x, float y) { return (flagsAt(x, y) & Res.SOLID) != 0; }
 
+  // the tile cache must redraw this column (a tile changed, or a brick started or stopped bouncing)
+  void mark(int tx) {
+    changes++;
+    if (tx < chMin) chMin = tx;
+    if (tx > chMax) chMax = tx;
+  }
+
   void change(float x, float y, int tile) {
     int tx = (int) x / 32, ty = (int) y / 32;
     if (tx < 0 || ty < 0) return;
     if (tx >= width || ty >= H) return;
     ia[ty * width + tx] = (byte) tile;
-    changes++;                         // tells Game's Potato tile cache to redraw those columns
-    if (tx < chMin) chMin = tx;
-    if (tx > chMax) chMax = tx;
+    mark(tx);
   }
 
   // collision_object_map: any solid tile under the rectangle (1 pixel smaller)
