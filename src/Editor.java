@@ -958,9 +958,13 @@ final class Editor {
       "Moving the pointer past the right edge scrolls too. Touch: hold near an edge to scroll, or tap the map under the level.",
       "Typing: multi-tap, * = case, # or C deletes.",
     };
-    int y = 30;
+    // landscape is only 240 tall: no gap after the keys and the text starts higher when it wouldn't fit
+    int lines = keys.length;
+    for (int i = 0; i < para.length; i++) lines += Game.wrap(para[i], (sw - 4) / 8).length;
+    boolean tight = 30 + 9 + lines * 9 > sh - 22;
+    int y = tight ? 22 : 30;
     for (int i = 0; i < keys.length; i++, y += 9) Res.text(g, Res.WHITE, keys[i], 2, y, 1);
-    y += 9;
+    if (!tight) y += 9;
     for (int i = 0; i < para.length; i++) {
       String[] l = Game.wrap(para[i], (sw - 4) / 8);
       for (int j = 0; j < l.length; j++, y += 9) Res.text(g, Res.WHITE, l[j], 2, y, 1);

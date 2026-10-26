@@ -217,7 +217,7 @@ final class Menu {
     int m = 0;
     for (int i = 0; i < count; i++)
       if (kind[i] == STRINGSELECT && list[i] != null)
-        for (int j = 0; j < list[i].length; j++) m = Math.max(m, list[i][j].length());
+        for (int j = 0; j < list[i].length; j++) m = Math.max(m, Math.min(list[i][j].length(), room(i)));   // as shown (long values are cut)
     return m;
   }
 

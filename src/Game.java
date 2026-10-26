@@ -1494,12 +1494,14 @@ final class Game extends GameCanvas implements Runnable {
   int lastTouchX = -1, lastTouchY = -1;
 
   // the MENU box while playing with Show touch: right edge, under the HUD
-  static final int MENU_Y = 22, MENU_H = 14;
-  boolean inMenuCorner(int x, int y) { return x >= sw - 48 && y >= MENU_Y - 4 && y < MENU_Y + MENU_H + 4; }
+  static final int MENU_H = 14;
+  int menuY() { return landscape ? 30 : 22; }   // landscape: under the lives icons
+  boolean inMenuCorner(int x, int y) { return x >= sw - 48 && y >= menuY() - 4 && y < menuY() + MENU_H + 4; }
   void drawMenuCorner(Graphics g) {
-    if (detail >= POTATO) { g.setColor(0xffffff); g.drawRect(sw - 48, MENU_Y, 47, MENU_H - 1); }
-    else Res.fillAlpha(g, sw - 48, MENU_Y, 48, MENU_H, 0x508080b4);
-    Res.textCentered(g, Res.WHITE, "MENU", sw - 24, MENU_Y + 3, detail >= POTATO ? 0 : 1);
+    int my = menuY();
+    if (detail >= POTATO) { g.setColor(0xffffff); g.drawRect(sw - 48, my, 47, MENU_H - 1); }
+    else Res.fillAlpha(g, sw - 48, my, 48, MENU_H, 0x508080b4);
+    Res.textCentered(g, Res.WHITE, "MENU", sw - 24, my + 3, detail >= POTATO ? 0 : 1);
   }
 
   // one finger: turns taps into the same presses and held keys the keypad gives
@@ -2114,10 +2116,29 @@ final class Game extends GameCanvas implements Runnable {
     }
   }
 
+  // cloud tops for cloud bottoms on a level's top row (x/tops.txt): drawn above the level in Full
+  // portrait, where 0.1.3's screen ended at that row and here sky shows instead of the rest
+  static byte[] topOf;
+  static void loadTops() {
+    topOf = new byte[256];
+    String[] l = Res.lines("/x/tops.txt");
+    for (int i = 0; i < l.length; i++) {
+      int sp = l[i].indexOf(' ');
+      if (sp > 0) topOf[Integer.parseInt(l[i].substring(0, sp)) & 0xff] = (byte) Integer.parseInt(l[i].substring(sp + 1).trim());
+    }
+  }
+
   void drawLayer(Graphics g, byte[] map, int col0, int col1, int ox, int top, boolean ia) {
     int w = level.width;
     if (col0 < 0) col0 = 0;
     if (col1 >= w) col1 = w - 1;
+    if (detail == FULL && top >= 16) {
+      if (topOf == null) loadTops();
+      for (int x = col0; x <= col1; x++) {
+        int t = topOf[map[x] & 0xff] & 0xff;
+        if (t != 0) Res.drawTile(g, t, ox + (x << 4), top - 16, frameCounter);
+      }
+    }
     for (int y = 0; y < Level.H; y++) {
       int row = y * w;
       for (int x = col0; x <= col1; x++) {
@@ -2205,8 +2226,8 @@ final class Game extends GameCanvas implements Runnable {
     }
     if (lives >= 5) {
       String s = lives + "x";
-      hud(g, Res.GOLD, s, lx + 63 - s.length() * 8, y);
-      Res.drawSpriteTL(g, Spr.TUX_LIFE, lx + 61, y);
+      hud(g, Res.GOLD, s, lx + 66 - s.length() * 8, y);   // clear of LIVES even at x99
+      Res.drawSpriteTL(g, Spr.TUX_LIFE, lx + 65, y);
     } else for (int i = 0; i < lives; ++i) Res.drawSpriteTL(g, Spr.TUX_LIFE, lx + (565 + 9 * i) / 2 - 240, y);
   }
 
@@ -2228,7 +2249,7 @@ final class Game extends GameCanvas implements Runnable {
 
   // centred text broken at spaces to fit the screen; returns the number of lines
   int centeredWrapped(Graphics g, int font, String t, int cx, int y, int lineH) {
-    String[] l = wrap(t, sw / 8);
+    String[] l = wrap(t, sw / 8 - 1);
     for (int i = 0; i < l.length; i++) Res.textCentered(g, font, l[i], cx, y + i * lineH);
     return l.length;
   }

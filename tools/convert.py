@@ -157,6 +157,13 @@ if ATNW:
     write_tiles(stock_ids, '-stock')
     stock_ed = {t: tiles[t]['edframe'] for t in stock_ids}
 ta = write_tiles(ids, '')
+# cloud bottoms (cloud-1x) and their tops (cloud-0x): levels put cloud bottoms on the top row, whose
+# tops were above the screen in 0.1.3; portrait shows sky up there, so Full draws the tops back
+with open(os.path.join(OUT, 'res', 'x', 'tops.txt'), 'w') as f:
+    byimg = {tiles[t]['images'][0]: t for t in ids if tiles[t]['images']}
+    for k in range(4):
+        b, t = byimg.get('cloud-1%d.png' % k), byimg.get('cloud-0%d.png' % k)
+        if b is not None and t is not None: f.write('%d %d\n' % (cidx[b], cidx[t]))
 # level editor: the editor image of each tile, and the tile groups (sorted by name like 0.1.3's std::set)
 groups = []
 for e in ts[1:]:
