@@ -204,7 +204,7 @@ final class Menu {
     int w = 0;
     for (int i = 0; i < count; i++) {
       boolean field = kind[i] == TEXTFIELD || kind[i] == NUMFIELD || kind[i] == CONTROLFIELD;
-      int l = text[i].length() + (field ? shown(i).length() + 1 : 0) + (kind[i] == STRINGSELECT ? selLen() : listText(i).length());
+      int l = text[i].length() + (field ? shown(i).length() + 1 : 0) + (kind[i] == STRINGSELECT ? selLen() + 3 : listText(i).length());   // + the arrows and the value box's edges
       if (l > w) { w = l; if (kind[i] == TOGGLE) w += 2; }
     }
     return w * 16 + 24;
@@ -237,7 +237,7 @@ final class Menu {
       int iw = field ? (in.length() + 1) * 8 : 0;
       String lt = listText(i);
       int lw = (kind[i] == STRINGSELECT ? selLen() : lt.length()) * 8;
-      int x = cx;
+      int x = cx - (kind[i] == STRINGSELECT ? 6 : 0);   // centres label, arrows and value box in the menu
       if (arrangeLeft) x += 12 - mw / 4 + (tw + iw + lw) / 2;
       boolean act = i == active;
       int font = act ? Res.BLUE : Res.WHITE, shadow = act ? 3 : 2;
