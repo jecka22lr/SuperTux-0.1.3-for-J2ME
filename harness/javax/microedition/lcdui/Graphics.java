@@ -3,10 +3,13 @@ import java.awt.Graphics2D;
 public class Graphics {
   public static final int HCENTER = 1, VCENTER = 2, LEFT = 4, RIGHT = 8, TOP = 16, BOTTOM = 32, BASELINE = 64;
   Graphics2D g; Font font = Font.getDefaultFont(); int cx, cy, cw = 10000, ch = 10000, tx, ty;
+  // drawing work counters for the tests: calls and pixels (alpha = pixels blended by drawRGB)
+  public static long nRegion, pxRegion, nImage, pxImage, nFill, pxFill, nRGB, pxAlpha;
+  public static void resetCounters() { nRegion = pxRegion = nImage = pxImage = nFill = pxFill = nRGB = pxAlpha = 0; }
   public Graphics(Graphics2D g) { this.g = g; }
   public void setColor(int c) { g.setColor(new java.awt.Color(c & 0xffffff)); }
   public void setColor(int r, int gg, int b) { setColor((r << 16) | (gg << 8) | b); }
-  public void fillRect(int x, int y, int w, int h) { g.fillRect(x, y, w, h); }
+  public void fillRect(int x, int y, int w, int h) { nFill++; pxFill += (long) Math.max(0, w) * Math.max(0, h); g.fillRect(x, y, w, h); }
   public void drawRect(int x, int y, int w, int h) { g.drawRect(x, y, w, h); }
   public void drawLine(int a, int b, int c, int d) { g.drawLine(a, b, c, d); }
   public void setClip(int x, int y, int w, int h) { g.setClip(x, y, w, h); cx = x; cy = y; cw = w; ch = h; }
@@ -19,8 +22,9 @@ public class Graphics {
   public int getTranslateX() { return tx; } public int getTranslateY() { return ty; }
   int ax(int x, int w, int a) { return (a & HCENTER) != 0 ? x - w / 2 : (a & RIGHT) != 0 ? x - w : x; }
   int ay(int y, int h, int a) { return (a & VCENTER) != 0 ? y - h / 2 : (a & BOTTOM) != 0 ? y - h : y; }
-  public void drawImage(Image i, int x, int y, int a) { g.drawImage(i.b, ax(x, i.getWidth(), a), ay(y, i.getHeight(), a), null); }
+  public void drawImage(Image i, int x, int y, int a) { nImage++; pxImage += (long) i.getWidth() * i.getHeight(); g.drawImage(i.b, ax(x, i.getWidth(), a), ay(y, i.getHeight(), a), null); }
   public void drawRegion(Image i, int sx, int sy, int w, int h, int t, int x, int y, int a) {
+    nRegion++; pxRegion += (long) w * h;
     if (t == 5 || t == 6) {                                    // TRANS_ROT90 / TRANS_ROT270
       x = ax(x, h, a); y = ay(y, w, a);
       java.awt.geom.AffineTransform old = g.getTransform();
@@ -42,6 +46,7 @@ public class Graphics {
     g.drawString(s, x, y);
   }
   public void drawRGB(int[] d, int off, int scan, int x, int y, int w, int h, boolean alpha) {
+    nRGB++; if (alpha) pxAlpha += (long) w * h;
     java.awt.image.BufferedImage b = new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_ARGB);
     b.setRGB(0, 0, w, h, d, off, scan);
     g.drawImage(b, x, y, null);

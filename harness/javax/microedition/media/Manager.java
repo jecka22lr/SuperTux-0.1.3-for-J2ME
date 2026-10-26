@@ -7,6 +7,7 @@ public class Manager {
     return new Player() {
       public void realize() {} public void prefetch() {} public void start() {} public void stop() {}
       public void close() {} public void setLoopCount(int n) {} public long setMediaTime(long t) { return 0; }
+      public Object getControl(String n) { return null; } public int getState() { return PREFETCHED; }
     };
   }
 }

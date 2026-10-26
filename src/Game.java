@@ -701,12 +701,23 @@ final class Game extends GameCanvas implements Runnable {
     for (int i = 0; i < names.length; i++) {
       int y = top + 50 + i * 11;
       Res.text(g, Res.WHITE, names[i], 5, y, 1);
-      Res.text(g, Res.GOLD, k[i], keyX, y, 1);
+      // portrait has 18 characters left of room: "Key 4 / Joystick left" becomes "4 / Joy left"
+      Res.text(g, Res.GOLD, landscape ? k[i] : cut(cut(k[i], "Key "), "stick"), keyX, y, 1);
+    }
+    if (showTouch) {                   // the on-screen buttons
+      String[] t = wrap("Touch: the arrows walk and jump, FIRE runs and shoots, JUMP jumps, MENU pauses", sw / 8);
+      for (int i = 0; i < t.length; i++) Res.text(g, Res.GOLD, t[i], 0, top + 140 + i * 10, 1);
     }
     String[] hint = wrap(rotate ? "Hold the phone keypad-right. Change keys in Options > Keyboard Setup"
         : "Change them in Options > Keyboard Setup", sw / 8);
     for (int i = 0; i < hint.length; i++) Res.text(g, Res.WHITE, hint[i], 0, top + 180 + i * 10, 1);
-    Res.text(g, Res.WHITE, "Press any key", 0, top + 215, 1);
+    Res.text(g, Res.WHITE, showTouch ? "Tap or press any key" : "Press any key", 0, top + 215, 1);
+  }
+
+  // s without the first occurrence of part (CLDC has no String.replace for strings)
+  static String cut(String s, String part) {
+    int i = s.indexOf(part);
+    return i < 0 ? s : s.substring(0, i) + s.substring(i + part.length());
   }
 
   // ---------------- Options > Option Help ----------------
@@ -761,7 +772,11 @@ final class Game extends GameCanvas implements Runnable {
       y += 11 + l.length * 10 + 6;
     }
     Res.text(g, Res.WHITE, "Page " + (helpPage + 1) + "/" + HELP.length, 0, sh - 22, 1);
-    Res.text(g, Res.WHITE, landscape ? "5: next page   * or #: close" : "5 next page, * close", 0, sh - 11, 1);
+    if (showTouch) {
+      Res.fillAlpha(g, sw - 48, 0, 48, 16, 0x508080b4);
+      Res.textCentered(g, Res.WHITE, "CLOSE", sw - 24, 3, 1);
+      Res.text(g, Res.WHITE, landscape ? "Tap right: next page, left: back" : "Tap right: next, left: back", 0, sh - 11, 1);
+    } else Res.text(g, Res.WHITE, landscape ? "5: next page   * or #: close" : "5 next page, * close", 0, sh - 11, 1);
   }
 
   // ---------------- level flow ----------------
@@ -1270,10 +1285,20 @@ final class Game extends GameCanvas implements Runnable {
   // the on-screen buttons: x, y, w, h, key bits, label
   static final String[] T_LABEL = { "<^", "^", "^>", "<", "v", ">", "FIRE", "JUMP" };
   static final int[] T_BITS = { K_LEFT | K_UP, K_UP, K_RIGHT | K_UP, K_LEFT, K_DOWN, K_RIGHT, K_FIRE, K_UP };
+  // the eight rectangles, worked out again only when the layout changes (no new arrays every frame)
+  private final int[][] tRects = new int[8][4]; private int tRectsFor = -1;
   int[] touchRect(int i) {
-    int h = landscape ? 40 : 48, y = sh - h;
-    if (i < 6) return new int[] { (i % 3) * 40, y + (i / 3) * (h / 2), 40, h / 2 };
-    return new int[] { sw - 120 + (i - 6) * 60, y, 60, h };
+    int key = (landscape ? 1 : 0) | (sw << 1) | (sh << 12);
+    if (key != tRectsFor) {
+      int h = landscape ? 40 : 48, y = sh - h;
+      for (int k = 0; k < 8; k++) {
+        int[] r = tRects[k];
+        if (k < 6) { r[0] = (k % 3) * 40; r[1] = y + (k / 3) * (h / 2); r[2] = 40; r[3] = h / 2; }
+        else { r[0] = sw - 120 + (k - 6) * 60; r[1] = y; r[2] = 60; r[3] = h; }
+      }
+      tRectsFor = key;
+    }
+    return tRects[i];
   }
 
   int touchButton(int x, int y) {
@@ -1330,7 +1355,11 @@ final class Game extends GameCanvas implements Runnable {
   // one finger: turns taps into the same presses and held keys the keypad gives
   int touch(int type, int x, int y) {
     lastTouchX = x; lastTouchY = y;
-    if (helpOpen) return type == T_PRESS ? K_SELECT | K_ANY : 0;     // a tap turns the page
+    if (helpOpen) {                    // CLOSE box top right; left half: page back; right half: next
+      if (type != T_PRESS) return 0;
+      if (x >= sw - 48 && y < 18) return K_ESC | K_ANY;
+      return x < sw / 2 ? K_LEFT | K_ANY : K_SELECT | K_ANY;
+    }
     Menu m = Menu.current;
     if (type == T_RELEASE) { touchKeys = 0; return 0; }
     if (m != null && state != NOTICE) {
