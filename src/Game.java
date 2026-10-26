@@ -739,8 +739,7 @@ final class Game extends GameCanvas implements Runnable {
 
   // ---------------- controls screen (show_controls) ----------------
   void drawControls(Graphics g) {
-    drawPicture(g, Pic.BG_TITLE);
-    Res.fillAlpha(g, 0, 0, sw, sh, 0xaa000000);
+    darkBackground(g, 0xaa000000);
     int top = landscape ? 0 : 40, keyX = landscape ? 140 : 96;
     Res.textCentered(g, Res.BLUE, "- Controls -", sw / 2, top + 15, 2);
     String[] names = { "Left", "Right", "Jump", "Duck", "Power / Run", "Run", "Jump + walk", "Pause menu" };
@@ -813,9 +812,18 @@ final class Game extends GameCanvas implements Runnable {
     if ((ev & (K_SELECT | K_RIGHT | K_DOWN | K_FIRE)) != 0 && ++helpPage >= HELP.length) helpOpen = false;
   }
 
-  void drawHelp(Graphics g) {
+  // Potato and Max Potato: the editor help's black-to-white gradient instead of the darkened picture
+  void darkBackground(Graphics g, int alpha) {
+    if (detail >= POTATO) {
+      for (int y = 0; y < sh; y += 4) { int v = y * 255 / sh; g.setColor((v << 16) | (v << 8) | v); g.fillRect(0, y, sw, 4); }
+      return;
+    }
     drawPicture(g, Pic.BG_TITLE);
-    Res.fillAlpha(g, 0, 0, sw, sh, 0xc8000000);
+    Res.fillAlpha(g, 0, 0, sw, sh, alpha);
+  }
+
+  void drawHelp(Graphics g) {
+    darkBackground(g, 0xc8000000);
     int top = landscape ? 0 : 20, per = sw / 8 - 2;
     String[] p = HELP[helpPage];
     Res.textCentered(g, Res.BLUE, "- " + p[0] + " -", sw / 2, top + 12, 2);
@@ -847,7 +855,7 @@ final class Game extends GameCanvas implements Runnable {
   void loadLevel(boolean intro) {
     float oldX = level != null && tux.dying != Player.DYING_NOT ? tux.x : -1;
     if (ramSaver) {                    // let go of everything the level doesn't need before loading it
-      level = null; tcLevel = null; tc = null; tcG = null; touchImg = null; hudImg = null;
+      level = null; tcLevel = null; tc = null; tcG = null; touchImg = null; hudImg = null; gradImg = null; logoStrip = null;
       bgImage = null; bgTall = null;     // loadBackground loads it again (the sky colour stays)
       if (!demo) logoImg = null;
       numbersImg = null; textImg = null; textTall = null; textImgNo = -1;
@@ -1708,7 +1716,8 @@ final class Game extends GameCanvas implements Runnable {
           Res.textCentered(g, Res.GOLD, "Max Potato mode ON", sw / 2, ly + 16, 0);
           Res.textCentered(g, Res.WHITE, "The title stands still", sw / 2, ly + 32, 0);
           Res.textCentered(g, Res.WHITE, "on purpose", sw / 2, ly + 42, 0);
-        } else g.drawImage(logo(), landscape ? 80 : 40, landscape ? 8 : 24, Graphics.TOP | Graphics.LEFT);
+        } else if (detail == POTATO) drawLogoStrip(g);
+        else g.drawImage(logo(), landscape ? 80 : 40, landscape ? 8 : 24, Graphics.TOP | Graphics.LEFT);
         if (detail < POTATO) {         // Potato and Max Potato: on the About screen instead
           String[] c = creditLines();
           int y0 = (landscape ? 392 : 535) - (c.length - (landscape ? 5 : 6)) * 17;
@@ -1767,6 +1776,22 @@ final class Game extends GameCanvas implements Runnable {
     loadLevel(false);
   }
 
+  // Potato: the logo drawn once onto a full-width strip of the sky colour, then copied without blending
+  Image logoStrip; int logoStripKey = -1;
+  void drawLogoStrip(Graphics g) {
+    Image lo = logo();
+    int lx = landscape ? 80 : 40, ly = landscape ? 8 : 24, h = lo.getHeight();
+    int key = skySolid ^ (landscape ? 1 << 24 : 0);
+    if (logoStrip == null || logoStrip.getWidth() != sw || logoStrip.getHeight() != h || key != logoStripKey) {
+      logoStrip = Image.createImage(sw, h);
+      Graphics lg = logoStrip.getGraphics();
+      lg.setColor(skySolid); lg.fillRect(0, 0, sw, h);
+      lg.drawImage(lo, lx, 0, Graphics.TOP | Graphics.LEFT);
+      logoStripKey = key;
+    }
+    g.drawImage(logoStrip, 0, ly, Graphics.TOP | Graphics.LEFT);
+  }
+
   Image logoImg;
   Image logo() {
     if (logoImg == null) { try { logoImg = Image.createImage("/lo.png"); } catch (Exception e) { logoImg = Image.createImage(1, 1); } }
@@ -1817,6 +1842,7 @@ final class Game extends GameCanvas implements Runnable {
   }
 
   Image bgTall;          // portrait: the background with a taller sky, filling the screen
+  Image gradImg; int gradA, gradB;   // Full: a picture-less level's sky gradient, drawn once
 
   // the sky colour Low and Potato fill with (the top of the level's picture, or its gradient's top)
   int skyFill() { return bgImageNo >= 0 ? skyColor : level.topColor; }
@@ -1968,6 +1994,17 @@ final class Game extends GameCanvas implements Runnable {
       for (int x = -s; x < sw; x += iw) g.drawImage(im, x, y0, Graphics.TOP | Graphics.LEFT);
     } else {
       int a = level.topColor, b = level.bottomColor;
+      // drawn once into an image and copied each frame (RAM saver: drawn every frame)
+      boolean cache = !ramSaver;
+      if (cache && gradImg != null && gradImg.getWidth() == sw && gradImg.getHeight() == sh && gradA == a && gradB == b) {
+        g.drawImage(gradImg, 0, 0, Graphics.TOP | Graphics.LEFT);
+        return;
+      }
+      Graphics gg0 = g;
+      if (cache) {
+        if (gradImg == null || gradImg.getWidth() != sw || gradImg.getHeight() != sh) gradImg = Image.createImage(sw, sh);
+        g = gradImg.getGraphics(); gradA = a; gradB = b;
+      } else gradImg = null;
       for (int y = 0; y < sh; y += 4) {
         int r = ((a >> 16) * (sh - y) + (b >> 16) * y) / sh;
         int gg = (((a >> 8) & 0xff) * (sh - y) + ((b >> 8) & 0xff) * y) / sh;
@@ -1975,6 +2012,7 @@ final class Game extends GameCanvas implements Runnable {
         g.setColor((r << 16) | (gg << 8) | bb);
         g.fillRect(0, y, sw, 4);
       }
+      if (cache) gg0.drawImage(gradImg, 0, 0, Graphics.TOP | Graphics.LEFT);
     }
   }
 
