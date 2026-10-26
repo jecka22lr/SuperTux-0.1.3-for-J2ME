@@ -3,6 +3,7 @@ A rewrite of SuperTux 0.1.3 for J2ME devices. 240p, landscape or portrait. Not m
 
 # Benchmarks?
 Sony Ericsson Cedar - Full speed, no known issues. Virtually perfect.
+
 Nokia E71 - Runs at full speed unless Sound is on due to some issues with 369MHz Symbian 9.2 phones. Triggering sound effects results in lag spikes.
 
 # What changed between the original port and this?
