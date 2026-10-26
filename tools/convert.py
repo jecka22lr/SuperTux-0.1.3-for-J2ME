@@ -504,8 +504,14 @@ if len(sys.argv) > 3:
         ext = os.path.splitext(p)[1].lower()
         if ext == '.mid':                       # a MIDI song: every phone plays it as it is
             shutil.copy(p, out); return
-        try: mod2mid.convert(p, out)
-        except Exception as e: print('no MIDI version of', src, '(%s)' % e.__class__.__name__)
+        if ext in ('.wav', '.ogg'):
+            # a recording has no notes to turn into MIDI: Music MIDI (and phones without MP3) play a
+            # stock song instead of nothing
+            low = os.path.basename(p).lower()
+            alias.append('mid:%s=%s' % (os.path.basename(out)[:-4], 'cr' if 'credit' in low else 't' if low.startswith(('title', 'intro')) else '0'))
+        else:
+            try: mod2mid.convert(p, out)
+            except Exception as e: print('no MIDI version of', src, '(%s: %s)' % (e.__class__.__name__, e))
         if have_ffmpeg and ext in ('.wav', '.ogg'):
             subprocess.run(['ffmpeg', '-hide_banner', '-v', 'error', '-y', '-i', p, '-ac', '1', '-ar', '22050',
                             '-c:a', 'libmp3lame', '-b:a', '24k', out[:-4] + '.mp3'], check=True)

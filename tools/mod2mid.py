@@ -1,9 +1,9 @@
-# XM (0.1.3's ".mod" music) -> General MIDI type 0, for J2ME phones.
+# XM (0.1.3's ".mod" music), MOD and IT -> General MIDI type 0, for J2ME phones.
 # One MIDI tick = one tracker tick (division 24, MIDI tempo = tracker BPM), so speed/BPM
 # changes carry over exactly. Instruments become GM programs or drums by name, or by sound
 # analysis for unnamed ones; their real pitch is measured from the sample data.
 import math, struct, sys
-from xm import XM
+from trackers import load
 
 NAMED = [  # keyword in instrument/sample name -> ('prog', n) or ('drum', key)
     ('bass drum', ('drum', 36)), ('kick', ('drum', 36)), ('claps', ('drum', 39)), ('clap', ('drum', 39)),
@@ -73,7 +73,7 @@ def vlq(n):
     return bytes(reversed(out))
 
 def convert(path, out, loop_once=True):
-    x = XM(path)
+    x = load(path)                 # XM, Protracker MOD or Impulse Tracker IT
     # notes used per instrument
     used = {}
     for o in x.order:

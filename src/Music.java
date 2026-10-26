@@ -72,7 +72,9 @@ final class Music {
     if (stem.equals(current) && player != null) return;
     stop();
     if (!mp3Failed && !midiOnly && open("/m/" + stem + ".mp3", "audio/mpeg", loops)) { current = stem; return; }
-    if (open("/m/" + stem + ".mid", "audio/midi", loops)) current = stem;
+    // a song that only exists as a recording names a stock MIDI song to use instead (m/a.txt mid:)
+    String mid = (String) alias.get("mid:" + stem);
+    if (open("/m/" + (mid != null ? resolve(mid) : stem) + ".mid", "audio/midi", loops)) current = stem;
   }
 
   private boolean open(String file, String type, int loops) {

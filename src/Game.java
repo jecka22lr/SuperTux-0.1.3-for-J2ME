@@ -1526,7 +1526,9 @@ final class Game extends GameCanvas implements Runnable {
       }
     } else {
       status(g);
-      if (showTouch && state == PLAY && Menu.current == null) drawTouch(g);
+      // the buttons stay while paused too: the level sits above them, so without them their space
+      // would be an empty strip (the menu is drawn over them and takes the taps)
+      if (showTouch && state == PLAY) drawTouch(g);
     }
     if (Menu.current != null) Menu.current.draw(g, sw / 2, sh, !landscape, now);
   }
