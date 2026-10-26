@@ -439,6 +439,12 @@ for i, n in enumerate(SOUNDS):
                               '-ac', '1', '-ar', str(rate), '-f', 's16le', '-'], check=True, stdout=subprocess.PIPE).stdout
         w = wave.open(os.path.join(OUT, 'res', d, '%d.wav' % i), 'wb')
         w.setnchannels(1); w.setsampwidth(2); w.setframerate(rate); w.writeframes(raw); w.close()
+    # more test formats: IMA ADPCM WAV and Sun AU (mu-law), both 8 kHz
+    for d, ext, codec, fmt in (('aa', 'wav', 'adpcm_ima_wav', 'wav'), ('au', 'au', 'pcm_mulaw', 'au')):
+        os.makedirs(os.path.join(OUT, 'res', d), exist_ok=True)
+        subprocess.run(['ffmpeg', '-hide_banner', '-v', 'error', '-y', '-i', os.path.join(SYM, 'sounds', n + '.wav'),
+                        '-ac', '1', '-ar', '8000', '-c:a', codec, '-f', fmt, '-map_metadata', '-1', '-fflags', '+bitexact',
+                        os.path.join(OUT, 'res', d, '%d.%s' % (i, ext))], check=True)
 def picture(path, name):
     n = len(bgnames); bgnames[name] = n
     Image.open(path).convert('RGB').quantize(128).save(os.path.join(OUT, 'res', 'b', '%d.png' % n), optimize=True)

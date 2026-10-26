@@ -6,4 +6,5 @@ public interface Player {
   long setMediaTime(long t) throws MediaException;
   Object getControl(String n);
   int getState();
+  long getDuration();
 }

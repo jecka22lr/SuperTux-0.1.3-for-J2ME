@@ -67,7 +67,7 @@ final class Music {
   }
   private String fileStem; private int fileLoops;
 
-  void start(String stem, int loops) {
+  synchronized void start(String stem, int loops) {
     if (!enabled) { stop(); return; }
     if (stem.equals(current) && player != null) return;
     stop();
@@ -95,7 +95,20 @@ final class Music {
     }
   }
 
-  void stop() {
+  // Sound's "Pause music" test option: hold the song while an effect plays, then carry on
+  private boolean heldForSfx;
+  synchronized void pauseForSfx() {
+    if (player == null || heldForSfx) return;
+    try { player.stop(); heldForSfx = true; } catch (Throwable e) { }
+  }
+  synchronized void resumeAfterSfx() {
+    if (!heldForSfx) return;
+    heldForSfx = false;
+    if (player != null) { try { player.start(); } catch (Throwable e) { } }
+  }
+
+  synchronized void stop() {
+    heldForSfx = false;
     if (player != null) {
       try { player.stop(); } catch (Throwable e) { }
       try { player.close(); } catch (Throwable e) { }

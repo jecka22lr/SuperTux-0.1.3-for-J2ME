@@ -55,8 +55,21 @@ final class Sound implements Runnable {
   int mode = NORMAL;
   // which WAV set: "/a/" 8-bit 11 kHz (the jars' own), or the test sets "/a16/" and "/a8/" (16-bit
   // 16 or 8 kHz) when the jar has them (SFXTEST builds)
-  static final String[] FORMATS = { "8bit 11k", "16bit 16k", "16bit 8k" };
-  static final String[] FORMAT_DIRS = { "/a/", "/a16/", "/a8/" };
+  static final String[] FORMATS = { "8bit 11k", "16bit 16k", "16bit 8k", "ADPCM 8k", "AU ulaw", "MIDI file" };
+  static final String[] FORMAT_DIRS = { "/a/", "/a16/", "/a8/", "/aa/", "/au/", null };   // null: made here
+  static final String[] FORMAT_EXT = { ".wav", ".wav", ".wav", ".wav", ".au", null };
+  static final String[] FORMAT_TYPE = { "audio/x-wav", "audio/x-wav", "audio/x-wav", "audio/x-wav", "audio/basic", "audio/midi" };
+  static final int MIDI_FILE = 5;
+  static boolean formatAvailable(int f) {
+    return f == 0 || f == MIDI_FILE || Sound.class.getResourceAsStream(FORMAT_DIRS[f] + "0" + FORMAT_EXT[f]) != null;
+  }
+
+  // Test option "Pause music": the music stops while an effect plays and carries on after it, for
+  // phones that can't play two sounds at once (System property supports.mixing=false)
+  Music music;
+  boolean pauseMusic;
+  private long resumeAt;
+  private final int[] lengthMs = new int[COUNT];
   int format;
   // how long the slowest sound start took in the last second (Show FPS shows it)
   volatile int stallMs, stallMax;
@@ -79,7 +92,7 @@ final class Sound implements Runnable {
 
   // a different WAV set: the players are made again from it
   void setFormat(int f) {
-    if (f == format || f < 0 || f >= FORMATS.length) return;
+    if (f == format || f < 0 || f >= FORMATS.length || !formatAvailable(f)) return;
     stop();
     synchronized (this) { format = f; ready = -1; notify(); }
   }
@@ -104,15 +117,30 @@ final class Sound implements Runnable {
       int n = -1, m;
       synchronized (this) {
         while (qHead == qTail && ready == mode) {
-          try { wait(); } catch (InterruptedException e) { return; }
+          long left = resumeAt - System.currentTimeMillis();
+          if (resumeAt != 0 && left <= 0) break;
+          try { if (resumeAt != 0) wait(left); else wait(); } catch (InterruptedException e) { return; }
         }
         m = mode;
-        if (ready == m) { n = queue[qHead]; qHead = (qHead + 1) % queue.length; }
+        if (ready == m && qHead != qTail) { n = queue[qHead]; qHead = (qHead + 1) % queue.length; }
       }
+      if (n < 0 && ready == m && resumeAt != 0 && System.currentTimeMillis() >= resumeAt) {
+        resumeAt = 0;                    // Pause music: the effect is over, the music carries on
+        if (music != null) music.resumeAfterSfx();
+        continue;
+      }
+      if (n < 0 && ready == m) continue;
       if (n < 0) {
         prepare(m);
         synchronized (this) { ready = m; qHead = qTail; }   // nothing queued meanwhile plays late
         continue;
+      }
+      if (pauseMusic && music != null && m != OFF) {
+        music.pauseForSfx();
+        int len = lengthMs[n] > 0 ? lengthMs[n] : 0;
+        if (m == MIDI || m == TONES) { len = 0; int[] t = NOTES[n]; for (int i = 1; i < t.length; i += 2) len += t[i] * 31; }
+        long end = System.currentTimeMillis() + (len > 0 ? len : 400) + 30;
+        if (end > resumeAt) resumeAt = end;
       }
       long t0 = System.currentTimeMillis();
       if (m == NORMAL) startNormal(n);
@@ -166,7 +194,8 @@ final class Sound implements Runnable {
 
   private byte[] readWav(int n) {
     try {
-      InputStream in = getClass().getResourceAsStream(FORMAT_DIRS[format] + n + ".wav");
+      if (FORMAT_DIRS[format] == null) return midiFile(n);
+      InputStream in = getClass().getResourceAsStream(FORMAT_DIRS[format] + n + FORMAT_EXT[format]);
       if (in == null) return null;
       java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
       byte[] buf = new byte[2048];
@@ -177,13 +206,45 @@ final class Sound implements Runnable {
     } catch (Throwable e) { return null; }
   }
 
+  // a small format 0 MIDI file of effect n (the MIDI mode's notes; 96 ticks a beat at 120 bpm, so a
+  // tick is about 5.2 ms and a note unit of 31 ms is 6 ticks)
+  private byte[] midiFile(int n) {
+    java.io.ByteArrayOutputStream t = new java.io.ByteArrayOutputStream();
+    int[] nt = NOTES[n];
+    t.write(0); t.write(0xC0); t.write(80);                  // square lead
+    t.write(0); t.write(0xB0); t.write(7); t.write(110);
+    int total = 0;
+    for (int i = 0; i < nt.length; i += 2) {
+      int note = nt[i], ch = 0, len = nt[i + 1] * 6;
+      if (note >= D) { note -= D; ch = 9; }
+      t.write(0); t.write(0x90 | ch); t.write(note); t.write(100);
+      vlq(t, len); t.write(0x80 | ch); t.write(note); t.write(0);
+      total += nt[i + 1] * 31;
+    }
+    t.write(0); t.write(0xFF); t.write(0x2F); t.write(0);
+    lengthMs[n] = total;
+    byte[] trk = t.toByteArray();
+    byte[] out = new byte[22 + trk.length];
+    byte[] h = { 'M', 'T', 'h', 'd', 0, 0, 0, 6, 0, 0, 0, 1, 0, 96, 'M', 'T', 'r', 'k' };
+    System.arraycopy(h, 0, out, 0, 18);
+    out[18] = (byte) (trk.length >> 24); out[19] = (byte) (trk.length >> 16); out[20] = (byte) (trk.length >> 8); out[21] = (byte) trk.length;
+    System.arraycopy(trk, 0, out, 22, trk.length);
+    return out;
+  }
+
+  private static void vlq(java.io.ByteArrayOutputStream o, int v) {
+    if (v >= 0x80) { if (v >= 0x4000) o.write(0x80 | (v >> 14)); o.write(0x80 | ((v >> 7) & 0x7f)); }
+    o.write(v & 0x7f);
+  }
+
   private Player makeWav(int n) {
     try {
       byte[] b = readWav(n);
       if (b == null) return null;
-      Player p = Manager.createPlayer(new ByteArrayInputStream(b), "audio/x-wav");
+      Player p = Manager.createPlayer(new ByteArrayInputStream(b), FORMAT_TYPE[format]);
       p.realize();
       p.prefetch();
+      try { long d = p.getDuration(); lengthMs[n] = d > 0 ? (int) (d / 1000) : 0; } catch (Throwable e) { }
       return p;
     } catch (Throwable e) { return null; }
   }

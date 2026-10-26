@@ -21,7 +21,7 @@ MicroEdition-Configuration: CLDC-1.1
 M
 cp -r res build/res
 rm -f build/res/t-stock.png build/res/t-stock.bin build/res/te-stock.bin   # only for the jars without the mod
-[ "$SFXTEST" = 1 ] || rm -rf build/res/a16 build/res/a8              # SFX format test sets: SFXTEST=1 sh build.sh
+[ "$SFXTEST" = 1 ] || rm -rf build/res/a16 build/res/a8 build/res/aa build/res/au             # SFX format test sets: SFXTEST=1 sh build.sh
 $J/bin/jar cfm build/raw.jar build/MANIFEST.MF -C build/cls . -C build/res . 2>&1 | grep -v JAVA_TOOL_OPTIONS || true
 cat > build/pg.pro <<P
 -injars $PWD/build/raw.jar
@@ -47,7 +47,7 @@ stock_tiles() {
 # lite build for old phones (1 MB JAR limit): MIDI music only
 mkdir -p build/lite && cd build/lite && unzip -q -o ../../dist/SuperTux.jar && rm -f m/*.mp3 && \
   { [ ! -f ../../res-atnw-only.txt ] || xargs rm -f < ../../res-atnw-only.txt; } && \
-  mv x/g-lite.txt x/g.txt && rm -f x/g-atnw.txt && rm -rf a16 a8 && stock_tiles && \
+  mv x/g-lite.txt x/g.txt && rm -f x/g-atnw.txt && rm -rf a16 a8 aa au && stock_tiles && \
   $J/bin/jar cfm ../../dist/SuperTux-lite.jar META-INF/MANIFEST.MF $(ls | grep -v META-INF) 2>&1 | grep -v JAVA_TOOL_OPTIONS || true
 cd ../..
 SIZE=$(stat -c %s dist/SuperTux-lite.jar)

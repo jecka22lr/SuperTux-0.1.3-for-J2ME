@@ -25,7 +25,7 @@ final class Game extends GameCanvas implements Runnable {
 
   // states
   static final int PLAY = 0, INTRO = 1, GAMEOVER = 2, ERROR = 4, TITLE = 5, WORLDMAP = 6, TEXT = 7,
-      CONTROLS = 8, LOADING = 9, EDITOR = 10, HIGHSCORE = 11, NOTICE = 12, ABOUT = 13;
+      CONTROLS = 8, LOADING = 9, EDITOR = 10, HIGHSCORE = 11, NOTICE = 12, ABOUT = 13, AUDIOINFO = 14;
 
   final SuperTux midlet;
   volatile boolean running = true;
@@ -111,7 +111,7 @@ final class Game extends GameCanvas implements Runnable {
   static final int M_START = 1, M_CONTRIB = 2, M_OPTIONS = 3, M_CONTROLS = 4, M_CREDITS = 5, M_QUIT = 6,
       M_SOUND = 10, M_MUSIC = 11, M_FPS = 12, M_LANDSCAPE = 13, M_TOUCH = 14, M_CONTINUE = 20, M_ABORT = 21,
       M_WM_RETURN = 30, M_WM_QUIT = 31, M_YES = 41, M_NO = 40, M_EDITOR = 7, M_KEYS = 50, M_HSNAME = 60,
-      M_STORY = 999, M_DETAIL = 15, M_FPSCAP = 16, M_RAM = 17, M_OPTHELP = 18, M_DRAWCAP = 19, M_ABOUT = 8, M_SFXFMT = 22;   // above any level number in a subset's level list
+      M_STORY = 999, M_DETAIL = 15, M_FPSCAP = 16, M_RAM = 17, M_OPTHELP = 18, M_DRAWCAP = 19, M_ABOUT = 8, M_SFXFMT = 22, M_PAUSEMUS = 23, M_AUDIOINFO = 9;   // above any level number in a subset's level list
   Menu mainMenu, optionsMenu, loadGameMenu, contribMenu, gameMenu, worldmapMenu, confirmMenu, keysMenu,
       contribSubsetMenu, highscoreMenu;
   String[] contribSubsets; int contribSubset;
@@ -204,6 +204,7 @@ final class Game extends GameCanvas implements Runnable {
     Res.cls = getClass();
     setFullScreenMode(true);
     tux = new Player(this);
+    sounds.music = music;
     loadSettings();
     loadWorlds();
     buildMenus();
@@ -233,7 +234,7 @@ final class Game extends GameCanvas implements Runnable {
           if (b[4] >= 5) detail = Math.max(FULL, Math.min(MAXPOTATO, in.readByte()));
           if (b[4] >= 6) { fpsCap = Math.max(0, Math.min(FPSCAP_MS.length - 1, in.readByte())); ramSaver = in.readBoolean(); }
           if (b[4] >= 7) drawCap = Math.max(0, Math.min(DRAWCAP_MS.length - 1, in.readByte()));
-          if (b[4] >= 8) { int f = in.readByte(); if (f > 0 && f < Sound.FORMATS.length && getClass().getResourceAsStream(Sound.FORMAT_DIRS[f] + "0.wav") != null) sounds.format = f; }
+          if (b[4] >= 8) { int f = in.readByte(); if (f > 0 && f < Sound.FORMATS.length && getClass().getResourceAsStream("/a16/0.wav") != null && Sound.formatAvailable(f)) sounds.format = f; }   // test builds only
         }
       }
     } catch (Throwable e) { }
@@ -313,6 +314,7 @@ final class Game extends GameCanvas implements Runnable {
     if (getClass().getResourceAsStream("/a16/0.wav") != null) {   // SFX format test build
       optionsMenu.insertAfter(M_SOUND, Menu.STRINGSELECT, "SFX type  ", M_SFXFMT);
       optionsMenu.setList(M_SFXFMT, Sound.FORMATS, sounds.format);
+      optionsMenu.insertAfter(M_SFXFMT, Menu.TOGGLE, "Pause music", M_PAUSEMUS);
     }
     keysMenu.add(Menu.LABEL, "Key Setup", 0).add(Menu.HL, "", 0)
         .add(Menu.CONTROLFIELD, "Left move", M_KEYS).add(Menu.CONTROLFIELD, "Right move", M_KEYS + 1)
@@ -347,6 +349,7 @@ final class Game extends GameCanvas implements Runnable {
         .add(Menu.ACTION, "Controls", M_CONTROLS)
         .add(Menu.ACTION, "Level Editor", M_EDITOR);
     if (detail >= POTATO) mainMenu.add(Menu.ACTION, "About", M_ABOUT);
+    if (getClass().getResourceAsStream("/a16/0.wav") != null) mainMenu.add(Menu.ACTION, "Audio info", M_AUDIOINFO);   // test builds
     mainMenu.add(Menu.ACTION, "Credits", M_CREDITS)
         .add(Menu.ACTION, "Quit", M_QUIT);
     mainMenu.active = Math.min(act, mainMenu.count - 1);
@@ -373,6 +376,43 @@ final class Game extends GameCanvas implements Runnable {
     for (int i = 0; i < c.length; i++) Res.textCentered(g, Res.WHITE, c[i].trim(), sw / 2, top + 25 + i * 12, 0);
     centeredWrapped(g, Res.WHITE, "Free software under the GNU GPL version 2. See COPYING.", sw / 2, top + 40 + c.length * 12, 10);
     Res.text(g, Res.GOLD, showTouch ? "Tap or press any key" : "Press any key", 0, sh - 12, 0);
+  }
+
+  // test builds: what the phone says about its sound, to see why effects stall
+  String[] audioInfo;
+  void drawAudioInfo(Graphics g) {
+    if (audioInfo == null) {
+      Vector v = new Vector();
+      String[] props = { "microedition.platform", "microedition.media.version", "supports.mixing",
+          "supports.audio.capture", "audio.encodings" };
+      for (int i = 0; i < props.length; i++) {
+        String p = null;
+        try { p = System.getProperty(props[i]); } catch (Throwable e) { }
+        v.addElement(props[i] + ": " + p);
+      }
+      Runtime rt = Runtime.getRuntime();
+      v.addElement("heap: " + rt.totalMemory() / 1024 + " KB, free " + rt.freeMemory() / 1024 + " KB");
+      String types = "";
+      try {
+        String[] t = javax.microedition.media.Manager.getSupportedContentTypes(null);
+        for (int i = 0; i < t.length; i++) if (t[i].startsWith("audio")) types += (types.length() > 0 ? ", " : "") + t[i];
+      } catch (Throwable e) { types = "? " + e; }
+      v.addElement("audio types: " + types);
+      String fm = "";
+      for (int i = 0; i < Sound.FORMATS.length; i++) if (Sound.formatAvailable(i)) fm += (fm.length() > 0 ? ", " : "") + Sound.FORMATS[i];
+      v.addElement("SFX sets in this jar: " + fm);
+      audioInfo = new String[v.size()];
+      v.copyInto(audioInfo);
+    }
+    g.setColor(0); g.fillRect(0, 0, sw, sh);
+    Res.textCentered(g, Res.BLUE, "- Audio info -", sw / 2, 4, 0);
+    int y = 18, per = sw / 8 - 1;
+    for (int i = 0; i < audioInfo.length && y < sh - 20; i++) {
+      String[] l = wrap(audioInfo[i], per);
+      for (int j = 0; j < l.length && y < sh - 20; j++, y += 10) Res.text(g, j == 0 ? Res.GOLD : Res.WHITE, l[j], 2, y, 0);
+      y += 3;
+    }
+    Res.text(g, Res.WHITE, showTouch ? "Tap or press any key" : "Press any key", 0, sh - 11, 0);
   }
 
   // generate_contrib_menu: the community packs, the level editor's subsets, then the bonus islands
@@ -488,6 +528,7 @@ final class Game extends GameCanvas implements Runnable {
       if (ramSaver) { tc = null; tcG = null; tcLevel = null; touchImg = null; hudImg = null; }
       loadBackground();
     }
+    if (optionsMenu.find(M_PAUSEMUS) >= 0) sounds.pauseMusic = optionsMenu.isToggled(M_PAUSEMUS);
 
     showFps = optionsMenu.isToggled(M_FPS);
     if (showTouch != optionsMenu.isToggled(M_TOUCH)) { showTouch = !showTouch; setLayout(landscape); }
@@ -555,6 +596,7 @@ final class Game extends GameCanvas implements Runnable {
         case M_START: curStart = 0; updateSlots(); break;
         case M_CONTROLS: state = CONTROLS; break;
         case M_ABOUT: state = ABOUT; break;
+        case M_AUDIOINFO: state = AUDIOINFO; audioInfo = null; break;
         case M_CONTRIB: generateContrib(); break;
         case M_EDITOR: openEditor(); break;
         case M_CREDITS:
@@ -1543,7 +1585,7 @@ final class Game extends GameCanvas implements Runnable {
       Menu mc = Menu.current;
       boolean sliding = mc != null && !Menu.noEffects && mc.effectEnd > System.currentTimeMillis() - 100;
       if (!sliding && (helpOpen || ((state == PLAY || state == WORLDMAP) && mc != null)
-          || (state == TITLE && detail == MAXPOTATO) || state == CONTROLS || state == ABOUT)) frameMs = Math.max(frameMs, 100);   // still screens too
+          || (state == TITLE && detail == MAXPOTATO) || state == CONTROLS || state == ABOUT || state == AUDIOINFO)) frameMs = Math.max(frameMs, 100);   // still screens too
       if (spent < frameMs) { try { Thread.sleep(frameMs - spent); } catch (InterruptedException e) { } }
       else Thread.yield();             // a slow phone that never sleeps still lets key and touch events in
     }
@@ -1651,7 +1693,7 @@ final class Game extends GameCanvas implements Runnable {
       if (music.type != Music.LEVEL) music.play(Music.LEVEL);
     } else if (state == TEXT) {
       textFrame(dt, ev);
-    } else if (state == CONTROLS || state == ABOUT) {
+    } else if (state == CONTROLS || state == ABOUT || state == AUDIOINFO) {
       if (ev != 0) { state = TITLE; Menu.setCurrent(mainMenu, now); }
     } else if (state == LOADING) {
       if (stateT++ > 0) openWorldMap();     // one "Loading..." frame first
@@ -1707,6 +1749,7 @@ final class Game extends GameCanvas implements Runnable {
     if (state == TEXT) { drawText(g); return; }
     if (state == CONTROLS) { drawControls(g); return; }
     if (state == ABOUT) { drawAbout(g); return; }
+    if (state == AUDIOINFO) { drawAudioInfo(g); return; }
     if (state == WORLDMAP) {
       worldmap.draw(g, sw, sh, landscape);
       if (showTouch && Menu.current == null) {
