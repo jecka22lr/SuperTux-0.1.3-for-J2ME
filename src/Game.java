@@ -425,7 +425,7 @@ final class Game extends GameCanvas implements Runnable {
 
     if (ramSaver != optionsMenu.isToggled(M_RAM)) {
       ramSaver = !ramSaver;
-      if (ramSaver) { tc = null; tcG = null; tcLevel = null; touchImg = null; }
+      if (ramSaver) { tc = null; tcG = null; tcLevel = null; touchImg = null; hudImg = null; }
       loadBackground();
     }
 
@@ -791,7 +791,7 @@ final class Game extends GameCanvas implements Runnable {
   void loadLevel(boolean intro) {
     float oldX = level != null && tux.dying != Player.DYING_NOT ? tux.x : -1;
     if (ramSaver) {                    // let go of everything the level doesn't need before loading it
-      level = null; tcLevel = null; tc = null; tcG = null; touchImg = null;
+      level = null; tcLevel = null; tc = null; tcG = null; touchImg = null; hudImg = null;
       bgImage = null; bgTall = null;     // loadBackground loads it again (the sky colour stays)
       if (!demo) logoImg = null;
       numbersImg = null; textImg = null; textTall = null; textImgNo = -1;
@@ -1329,7 +1329,7 @@ final class Game extends GameCanvas implements Runnable {
       g.drawImage(touchImg, 0, y0, Graphics.TOP | Graphics.LEFT);
       return;
     }
-    drawButtons(g, pressed, detail == POTATO);   // Potato: outlines and labels only
+    drawButtons(g, pressed, detail != FULL);   // drawn every frame below Full: outlines and labels only
   }
 
   void drawButtons(Graphics g, int pressed, boolean plain) {
@@ -1449,6 +1449,8 @@ final class Game extends GameCanvas implements Runnable {
       }
       long spent = System.currentTimeMillis() - t0;
       int frameMs = FPSCAP_MS[fpsCap];
+      // paused (or reading the help): nothing moves, so 10 frames a second are plenty
+      if (helpOpen || ((state == PLAY || state == WORLDMAP) && Menu.current != null)) frameMs = Math.max(frameMs, 100);
       if (spent < frameMs) { try { Thread.sleep(frameMs - spent); } catch (InterruptedException e) { } }
     }
   }
@@ -1900,9 +1902,32 @@ final class Game extends GameCanvas implements Runnable {
     if (hudVal[slot] != v || hudStr[slot] == null) { hudVal[slot] = v; hudStr[slot] = prefix + v; }
     return hudStr[slot];
   }
-  void hud(Graphics g, int font, String s, int x, int y) { Res.text(g, font, s, x, y, detail == POTATO ? 0 : 1); }
+  void hud(Graphics g, int font, String s, int x, int y) { Res.text(g, font, s, x, y, detail == FULL ? 1 : 0); }   // shadow only in Full
+
+  // Portrait below Full (without RAM saver): the HUD sits on the plain sky above the level, so it is
+  // drawn into a small image and redrawn only when something on it changes (about once a second)
+  Image hudImg; int hudSky = -1, hudScore = -1, hudTl = -1, hudCoins = -1, hudLives = -1, hudFlags = -1; String hudFps;
 
   void status(Graphics g) {
+    int hh = showFps ? 30 : 20;
+    if (landscape || detail == FULL || ramSaver || testMode || (viewTop >> 1) < hh) { statusDraw(g); return; }
+    int tl = (int) ((timeEnd - now) / 1000);
+    if (tl < 0) tl = 0;
+    int sky = skyFill();
+    boolean blink = endSequence == 0 && timeEnd - now <= TIME_WARNING && (frameCounter % 10) >= 5;
+    int flags = (showFps ? 1 : 0) | (blink ? 2 : 0) | (endSequence == 0 && now >= timeEnd ? 4 : 0) | (detail << 3);
+    if (hudImg == null || hudImg.getWidth() != sw || hudImg.getHeight() != hh) { hudImg = Image.createImage(sw, hh); hudFlags = -1; }
+    if (sky != hudSky || score != hudScore || tl != hudTl || distros != hudCoins || lives != hudLives || flags != hudFlags
+        || (showFps && fpsText != hudFps)) {
+      Graphics hg = hudImg.getGraphics();
+      hg.setColor(sky); hg.fillRect(0, 0, sw, hh);
+      statusDraw(hg);
+      hudSky = sky; hudScore = score; hudTl = tl; hudCoins = distros; hudLives = lives; hudFlags = flags; hudFps = fpsText;
+    }
+    g.drawImage(hudImg, 0, 0, Graphics.TOP | Graphics.LEFT);
+  }
+
+  void statusDraw(Graphics g) {
     int tl = (int) ((timeEnd - now) / 1000);
     if (tl < 0) tl = 0;
     hud(g, Res.WHITE, "SCORE", 0, 0);

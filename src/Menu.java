@@ -29,7 +29,7 @@ final class Menu {
   int posX = -1;                          // screen x of the centre (-1: middle of the screen)
   boolean arrangeLeft;
   long effectEnd;                         // slide-in effect (500 ms, real time: game time stops in pause)
-  static boolean noEffects;               // Options > Detail > Potato
+  static boolean noEffects;               // Options > Detail > Potato: no slide-in, solid boxes
 
   Menu add(int k, String t, int ident) { return add(k, t, ident, null, false); }
 
@@ -221,7 +221,9 @@ final class Menu {
       if (ay > sh * 2 - 40) py -= ay - (sh * 2 - 40);
       if (ay < 40) py += 40 - ay;
     }
-    Res.fillAlpha(g, cx - mw / 4, (py - 12 * count - 10) / 2, mw / 2, (mh + 20) / 2, 0x7d96b4c8);
+    // the translucent box; Potato: one solid fill in about the colour it shows over the sky
+    if (noEffects) { g.setColor(0x6f8bc4); g.fillRect(cx - mw / 4, (py - 12 * count - 10) / 2, mw / 2, (mh + 20) / 2); }
+    else Res.fillAlpha(g, cx - mw / 4, (py - 12 * count - 10) / 2, mw / 2, (mh + 20) / 2, 0x7d96b4c8);
     boxX = cx - mw / 4; boxY = (py - 12 * count - 10) / 2; boxW = mw / 2; boxH = (mh + 20) / 2;
     if (itemY.length < count) itemY = new int[count + 8];
     for (int i = 0; i < count; i++) itemY[i] = (py + 24 * i - mh / 2 + 12) / 2;
@@ -245,7 +247,8 @@ final class Menu {
         case DEACTIVE: text480(g, Res.BLACK, text[i], x, y, 2); break;
         case HL: {
           int hx = cx - mw / 4, yy = (y - 12 - eo + 6) / 2;
-          Res.fillAlpha(g, hx, yy, mw / 2, 2, 0xe196c8ff);
+          if (noEffects) { g.setColor(0x96c8ff); g.fillRect(hx, yy, mw / 2, 2); }
+          else Res.fillAlpha(g, hx, yy, mw / 2, 2, 0xe196c8ff);
           g.setColor(0xffffff); g.fillRect(hx, yy, mw / 2, 1);
           break;
         }
@@ -254,7 +257,7 @@ final class Menu {
           int ip = iw / 2, tp = (tw + 8) / 2;
           // (the 320x240 build halves these widths, which left the text sticking out; full width here)
           g.setColor(0xffffff); g.fillRect(x + tp - iw / 2 - 5, (y - 10) / 2, iw + 10, 10);
-          Res.fillAlpha(g, x + tp - iw / 2 - 4, (y - 9) / 2, iw + 8, 9, 0x80000000);
+          g.setColor(0x7f7f7f); g.fillRect(x + tp - iw / 2 - 4, (y - 9) / 2, iw + 8, 9);   // half black over white
           String s = in;
           if (kind[i] != CONTROLFIELD) s += act && (t / 500) % 2 == 0 ? "_" : " ";
           text480(g, Res.GOLD, s, x + tp, y, 2);
@@ -268,7 +271,7 @@ final class Menu {
           Res.drawSpriteTL(g, Spr.IC_LEFT, bx - 9, (y - 8) / 2);
           Res.drawSpriteTL(g, Spr.IC_RIGHT, bx + lp2 + 3, (y - 8) / 2);
           g.setColor(0xffffff); g.fillRect(bx, (y - 10) / 2, lp2 + 2, 10);
-          Res.fillAlpha(g, x + tp - lp2 / 2, (y - 9) / 2, lp2, 9, 0x80000000);
+          g.setColor(0x7f7f7f); g.fillRect(x + tp - lp2 / 2, (y - 9) / 2, lp2, 9);         // half black over white
           text480(g, Res.GOLD, lt, x + tp, y, 2);
           text480(g, font, text[i], x - lp2 / 2, y, shadow);
           break;

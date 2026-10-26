@@ -16,7 +16,7 @@ public class Probe {
       Graphics.resetCounters();
       System.out.println((land == 1 ? "land " : "port ") + Game.DETAIL_MODES[d] + " showTouch=" + g.showTouch);
       g.drawWorld(gr); System.out.println("  world  " + c());
-      g.status(gr); System.out.println("  hud    " + c());
+      g.status(gr); System.out.println("  hud    " + c()); g.status(gr); System.out.println("  hud2   " + c());
       if (g.showTouch) { g.drawTouch(gr); g.drawMenuCorner(gr); System.out.println("  touch  " + c()); }
       Menu.setCurrent(g.gameMenu, 0); Menu.noEffects = true; g.gameMenu.draw(gr, g.sw / 2, g.sh, land == 0, 0); System.out.println("  pause menu " + c()); Menu.setCurrent(null, 0);
     }

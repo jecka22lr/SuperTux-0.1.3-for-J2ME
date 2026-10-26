@@ -29,8 +29,8 @@ Community levels made for 0.1.3 under Bonus Levels: Tux Strikes Back by Christia
 More options for slow phones:
 | Option | What it does |
 |---|---|
-| Detail: Low | Plain sky colour instead of the background picture, no snow or clouds, level tiles drawn from a cached image (only coins and other animated tiles are drawn every frame) |
-| Detail: Potato | Also: tiles drawn from a cached image (only newly scrolled columns get drawn), no tile, enemy, fireball or star animations, defeated enemies vanish, no flying scores, coins or brick pieces, no fades, menu slides or HUD text shadows |
+| Detail: Low | Plain sky colour instead of the background picture, no snow or clouds, level tiles drawn from a cached image (only coins and other animated tiles are drawn every frame), no HUD shadow, outlined touch buttons in landscape |
+| Detail: Potato | Also: tiles drawn from a cached image (only newly scrolled columns get drawn), no tile, enemy, fireball or star animations, defeated enemies vanish, no flying scores, coins or brick pieces, no fades, menu slides or HUD text shadows, solid menu boxes |
 | Music: MIDI | No MP3 decoding |
 | Sound: Fast / MIDI / Nokia | Other ways of playing sound effects, for phones whose Java freezes when one starts |
 | FPS cap | Max, 25, 20 or 15. Fewer frames leaves the phone idle time, which can smooth out sound and music |
