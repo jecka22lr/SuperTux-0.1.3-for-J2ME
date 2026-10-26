@@ -583,6 +583,23 @@ if len(sys.argv) > 3:
         print('adventure-only files', len(own))
     print('music', sorted(os.listdir(os.path.join(OUT, 'res', 'm'))))
 
+# sky colours of every background picture, so Low and Potato never load the picture itself:
+# Potato's solid colour (the average of the upper half, where the sky is) and Low's soft gradient
+# (the average of the top rows down to the average around the middle, eased toward the top colour)
+def mean(img, y0, y1):
+    px = list(img.crop((0, y0, img.size[0], max(y0 + 1, y1))).getdata())
+    return tuple(sum(p[i] for p in px) // len(px) for i in range(3))
+def mix(a, b, t): return tuple(int(a[i] * (1 - t) + b[i] * t) for i in range(3))
+with open(os.path.join(OUT, 'res', 'x', 'bgc.txt'), 'w') as f:
+    for fn in sorted([f for f in os.listdir(os.path.join(OUT, 'res', 'b')) if re.match(r'\d+\.png$', f)], key=lambda s: int(s.split('.')[0])):
+        im = Image.open(os.path.join(OUT, 'res', 'b', fn)).convert('RGB')
+        h = im.size[1]
+        potato = mean(im, 0, h // 2)
+        top = mean(im, 0, max(1, h * 15 // 100))
+        bottom = mix(mean(im, h * 45 // 100, h * 60 // 100), top, 0.3)
+        hexc = lambda c: '%02x%02x%02x' % c
+        f.write('%s|%s|%s|%s\n' % (fn.split('.')[0], hexc(potato), hexc(top), hexc(bottom)))
+
 # the MIDlet icon: 0.1.3's 32x32 icon.xpm (PIL can't read it; ImageMagick can)
 import subprocess
 subprocess.run(['convert', os.path.join(SYM, 'images', 'icon.xpm'), 'PNG32:' + os.path.join(OUT, 'res', 'icon.png')], check=True)

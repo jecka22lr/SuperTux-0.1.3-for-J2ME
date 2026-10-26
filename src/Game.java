@@ -240,12 +240,12 @@ final class Game extends GameCanvas implements Runnable {
     setLayout(landscape);
   }
 
-  // settings byte 2: 0 off, 1 normal (what older versions saved for off / on), 2 fast, 3 MIDI, 4 Nokia
+  // settings byte 2: 0 off, 1 normal (what older versions saved for off / on), 2 fast, 3 MIDI, 4 Nokia, 5 tones
   static int soundModeOf(byte b) {
-    return b == 0 ? Sound.OFF : b == 2 ? Sound.FAST : b == 3 ? Sound.MIDI : b == 4 ? Sound.NOKIA : Sound.NORMAL;
+    return b == 0 ? Sound.OFF : b == 2 ? Sound.FAST : b == 3 ? Sound.MIDI : b == 4 ? Sound.NOKIA : b == 5 ? Sound.TONES : Sound.NORMAL;
   }
   static int soundByte(int mode) {
-    return mode == Sound.OFF ? 0 : mode == Sound.FAST ? 2 : mode == Sound.MIDI ? 3 : mode == Sound.NOKIA ? 4 : 1;
+    return mode == Sound.OFF ? 0 : mode == Sound.FAST ? 2 : mode == Sound.MIDI ? 3 : mode == Sound.NOKIA ? 4 : mode == Sound.TONES ? 5 : 1;
   }
 
   void saveSettings() {
@@ -471,7 +471,10 @@ final class Game extends GameCanvas implements Runnable {
 
   // draw_demo: Tux walks right, jumping on a random timer, at half speed
   void demoFrame(long dt) {
-    if (detail == MAXPOTATO) return;   // Max Potato: a still title screen
+    if (detail == MAXPOTATO) {         // Max Potato: a still title screen (the music still plays)
+      if (music.type != Music.LEVEL) music.play(Music.LEVEL);
+      return;
+    }
     tux.inRight = true; tux.inLeft = false; tux.inDown = false; tux.inFire = false;
     if (now < randomEnd) tux.inUp = !walking;
     else { randomEnd = now + 3000 + Math.abs(rnd.nextInt()) % 3000; walking = !walking; }
@@ -743,6 +746,7 @@ final class Game extends GameCanvas implements Runnable {
       "Normal|Every sound effect, like the original.",
       "Fast|An effect still playing isn't restarted. Fewer stalls.",
       "MIDI|Effects as short MIDI notes. For phones that freeze when a sound plays.",
+      "Tones|The same notes as simple beeps. Works on every phone; try it if MIDI is silent.",
       "Nokia|Effects through Nokia's own sound system. Try it on Nokia phones that freeze.",
       "Off|No sound effects." },
     { "Music",
@@ -786,7 +790,7 @@ final class Game extends GameCanvas implements Runnable {
       Res.text(g, Res.GOLD, p[i].substring(0, bar), 5, y, 1);
       String[] l = wrap(p[i].substring(bar + 1), per);
       for (int j = 0; j < l.length; j++) Res.text(g, Res.WHITE, l[j], 13, y + 11 + j * 10, 1);
-      y += 11 + l.length * 10 + 6;
+      y += 11 + l.length * 10 + (p.length > 6 ? 3 : 6);   // long pages close up a little
     }
     Res.text(g, Res.WHITE, "Page " + (helpPage + 1) + "/" + HELP.length, 0, sh - 22, 1);
     if (showTouch) {
@@ -852,8 +856,14 @@ final class Game extends GameCanvas implements Runnable {
   // straight away instead of at the next level
   void loadBackground() {
     if (level == null) return;
-    boolean keepBg = detail == FULL;          // Low and Potato only need its colour
+    boolean keepBg = detail == FULL;          // Low and Potato only need its colours
     boolean wantTall = keepBg && !ramSaver;   // the portrait copy with a taller sky: RAM saver skips it
+    setSkyColours();
+    if (!keepBg && level.background != 255 && level.background < bgPotato.length && bgPotato[level.background] >= 0) {
+      // the colours come from x/bgc.txt: the picture itself isn't loaded at all
+      bgImage = null; bgTall = null; bgImageNo = level.background; skyColor = bgTop[level.background];
+      return;
+    }
     if (level.background != 255 && (level.background != bgImageNo || (keepBg && bgImage == null)
         || (wantTall && bgTall == null))) {
       bgImage = null; bgTall = null;
@@ -1333,12 +1343,12 @@ final class Game extends GameCanvas implements Runnable {
     for (int i = 0; i < 8; i++)
       if ((touchKeys & T_BITS[i]) == T_BITS[i] && touchKeys != 0 && touchButton(lastTouchX, lastTouchY) == i) pressed |= 1 << i;
     if (!landscape && detail != FULL && !ramSaver) {
-      int h = touchRect(6)[3], y0 = sh - h, sky = skyFill();
+      int h = touchRect(6)[3], y0 = sh - h, sky = skyKey();
       int key = pressed ^ (sky << 8);
       if (touchImg == null || touchImg.getWidth() != sw || touchImg.getHeight() != h) { touchImg = Image.createImage(sw, h); touchImgKey = -1; }
       if (key != touchImgKey) {
         Graphics tg = touchImg.getGraphics();
-        tg.setColor(sky); tg.fillRect(0, 0, sw, h);
+        fillSky(tg, 0, 0, sw, h, y0);
         tg.translate(0, -y0);
         drawButtons(tg, pressed, false);
         touchImgKey = key;
@@ -1406,7 +1416,7 @@ final class Game extends GameCanvas implements Runnable {
         return 0;
       }
       case EDITOR:
-        if (y >= 240 && !editor.help) { touchKeys = 0; return 0; }      // the minimap under the portrait editor
+        if (y >= 240 && !editor.help) { touchKeys = 0; editor.minimapTouch(x); return 0; }   // the minimap under the portrait editor
         if (editor.touch(type, x, y)) return K_ANY;
         touchKeys = K_SELECT;
         return 0;
@@ -1472,8 +1482,11 @@ final class Game extends GameCanvas implements Runnable {
       long spent = System.currentTimeMillis() - t0;
       int frameMs = FPSCAP_MS[fpsCap];
       // paused (or reading the help): nothing moves, so 10 frames a second are plenty
-      if (helpOpen || ((state == PLAY || state == WORLDMAP) && Menu.current != null)
-          || (state == TITLE && detail == MAXPOTATO)) frameMs = Math.max(frameMs, 100);   // still title too
+      // (once a menu has finished sliding in, so Full keeps its smooth slide)
+      Menu mc = Menu.current;
+      boolean sliding = mc != null && !Menu.noEffects && mc.effectEnd > System.currentTimeMillis() - 100;
+      if (!sliding && (helpOpen || ((state == PLAY || state == WORLDMAP) && mc != null)
+          || (state == TITLE && detail == MAXPOTATO))) frameMs = Math.max(frameMs, 100);   // still title too
       if (spent < frameMs) { try { Thread.sleep(frameMs - spent); } catch (InterruptedException e) { } }
       else Thread.yield();             // a slow phone that never sleeps still lets key and touch events in
     }
@@ -1653,7 +1666,13 @@ final class Game extends GameCanvas implements Runnable {
     drawWorld(g);
     if (state == TITLE) {
       if (Menu.current == mainMenu) {
-        g.drawImage(logo(), landscape ? 80 : 40, landscape ? 8 : 24, Graphics.TOP | Graphics.LEFT);
+        if (detail == MAXPOTATO) {     // no logo picture: a note that the still screen isn't frozen
+          int ly = landscape ? 30 : 50;
+          Res.textCentered(g, Res.GOLD, "SuperTux 0.1.3", sw / 2, ly, 0);
+          Res.textCentered(g, Res.GOLD, "Max Potato mode ON", sw / 2, ly + 16, 0);
+          Res.textCentered(g, Res.WHITE, "The title stands still", sw / 2, ly + 32, 0);
+          Res.textCentered(g, Res.WHITE, "on purpose", sw / 2, ly + 42, 0);
+        } else g.drawImage(logo(), landscape ? 80 : 40, landscape ? 8 : 24, Graphics.TOP | Graphics.LEFT);
         String[] c = landscape
             ? new String[] { " SuperTux 0.1.3 - " + RELEASE, "Made by SuperTux Devel Team",
                 "Originally ported by Lars 'Anotherguest'", "2026 J2ME port", "by Jecka22LR" }
@@ -1734,11 +1753,10 @@ final class Game extends GameCanvas implements Runnable {
     if (detail != FULL && !ramSaver) {
       // Low and Potato: the tiles come from the cache, which covers the level's rows, so only the
       // sky above and below it needs filling; Low draws its animated tiles (coins, water) on top
-      int sky = skyFill();
-      g.setColor(sky);
-      if (top > 0) g.fillRect(0, 0, sw, top);
+      int sky = skyKey();
+      fillSky(g, 0, 0, sw, top, 0);
       int bot = top + (Level.H << 4);
-      if (bot < sh) g.fillRect(0, bot, sw, sh - bot);
+      fillSky(g, 0, bot, sw, sh - bot, bot);
       drawCached(g, sx0, top, sky);
       if (detail == LOW) { drawAnimated(g, level.bg, col0, col1, ox, top); drawAnimated(g, level.ia, col0, col1, ox, top); }
     } else {
@@ -1774,6 +1792,55 @@ final class Game extends GameCanvas implements Runnable {
 
   // the sky colour Low and Potato fill with (the top of the level's picture, or its gradient's top)
   int skyFill() { return bgImageNo >= 0 ? skyColor : level.topColor; }
+
+  // ---- Low's gradient and Potato's solid sky, from the level's picture (x/bgc.txt, worked out by
+  // convert.py) or from the level's own gradient when it has no picture ----
+  static int[] bgPotato = new int[0], bgTop, bgBottom;
+  int skyTop, skyBottom, skySolid;     // this level's
+
+  void setSkyColours() {
+    if (bgPotato.length == 0) {
+      String[] l = Res.lines("/x/bgc.txt");
+      int max = -1;
+      for (int i = 0; i < l.length; i++) { String[] f = split(l[i], '|'); if (f.length >= 4) max = Math.max(max, Integer.parseInt(f[0])); }
+      bgPotato = new int[max + 1]; bgTop = new int[max + 1]; bgBottom = new int[max + 1];
+      for (int i = 0; i <= max; i++) bgPotato[i] = -1;
+      for (int i = 0; i < l.length; i++) {
+        String[] f = split(l[i], '|');
+        if (f.length < 4) continue;
+        int n = Integer.parseInt(f[0]);
+        bgPotato[n] = Integer.parseInt(f[1], 16); bgTop[n] = Integer.parseInt(f[2], 16); bgBottom[n] = Integer.parseInt(f[3], 16);
+      }
+      if (max < 0) bgPotato = new int[] { -1 };
+    }
+    int b = level.background;
+    if (b != 255 && b < bgPotato.length && bgPotato[b] >= 0) { skySolid = bgPotato[b]; skyTop = bgTop[b]; skyBottom = bgBottom[b]; }
+    else { skyTop = level.topColor; skyBottom = level.bottomColor; skySolid = mixColour(skyTop, skyBottom, 128); }
+  }
+
+  static int mixColour(int a, int b, int t) {          // t of 256 toward b
+    int r = ((a >> 16) * (256 - t) + (b >> 16) * t) >> 8;
+    int g = (((a >> 8) & 0xff) * (256 - t) + ((b >> 8) & 0xff) * t) >> 8;
+    int bl = ((a & 0xff) * (256 - t) + (b & 0xff) * t) >> 8;
+    return (r << 16) | (g << 8) | bl;
+  }
+
+  // what identifies the sky the caches were drawn with
+  int skyKey() { return detail == LOW ? (skyTop * 31 + skyBottom) * 31 + viewTop : skySolid; }
+
+  // sky between rows y and y + h of g, whose row y is screen row sy: Low a soft top-to-bottom
+  // gradient in 4-pixel bands, Potato and Max Potato one solid colour
+  void fillSky(Graphics g, int x, int y, int w, int h, int sy) {
+    if (h <= 0) return;
+    if (detail != LOW) { g.setColor(skySolid); g.fillRect(x, y, w, h); return; }
+    int off = sy - y;
+    for (int yy = y; yy < y + h; ) {
+      int s = yy + off, end = Math.min(y + h, ((s >> 2) + 1 << 2) - off);
+      g.setColor(mixColour(skyTop, skyBottom, Math.max(0, Math.min(256, (s << 8) / sh))));
+      g.fillRect(x, yy, w, end - yy);
+      yy = end;
+    }
+  }
 
   // Low: the animated tiles the cache leaves out, drawn each frame at their current frame
   void drawAnimated(Graphics g, byte[] map, int col0, int col1, int ox, int top) {
@@ -1812,11 +1879,11 @@ final class Game extends GameCanvas implements Runnable {
       // a coin, brick or bonus block changed: redraw just those columns (and up to 7 to their right,
       // which a wide tile there could reach into)
       int a = Math.max(level.chMin, tcFirst), b = Math.min(level.chMax + 7, tcLast);
-      for (int c = a; c <= b; c++) cacheColumn(c, sky);
+      for (int c = a; c <= b; c++) cacheColumn(c, top);
     }
     tcChanges = level.changes; level.chMin = Integer.MAX_VALUE; level.chMax = -1;
     for (int c = c0; c <= c1; c++)
-      if (tcLast < 0 || c < tcFirst || c > tcLast) cacheColumn(c, sky);
+      if (tcLast < 0 || c < tcFirst || c > tcLast) cacheColumn(c, top);
     tcFirst = c0; tcLast = c1;
     int slot = c0 % tcN, x = (c0 << 4) - (sx0 >> 1);
     int w1 = Math.min(n, tcN - slot);
@@ -1826,11 +1893,10 @@ final class Game extends GameCanvas implements Runnable {
 
   // one column, drawn like drawLayer would (bg then ia, rows top to bottom) but clipped to the
   // column; tiles up to 8 columns to the left can be wide enough to reach into it
-  void cacheColumn(int c, int sky) {
+  void cacheColumn(int c, int top) {
     int x = (c % tcN) << 4, h = Level.H << 4, w = level.width;
     tcG.setClip(x, 0, 16, h);
-    tcG.setColor(sky);
-    tcG.fillRect(x, 0, 16, h);
+    fillSky(tcG, x, 0, 16, h, top);
     int a = Math.max(0, c - 7), b = Math.min(c, w - 1);
     for (int l = 0; l < 2; l++) {
       byte[] map = l == 0 ? level.bg : level.ia;
@@ -1854,7 +1920,8 @@ final class Game extends GameCanvas implements Runnable {
   void background(Graphics g, float sx) {
     int top = viewTop >> 1;
     // Low and Potato, or a picture RAM saver (or a switch to Full mid-level) left unloaded: one fill
-    if (detail != FULL || (bgImage == null && bgImageNo >= 0)) {
+    if (detail != FULL) { fillSky(g, 0, 0, sw, sh, 0); return; }   // Low: gradient; Potato: solid
+    if (bgImage == null && bgImageNo >= 0) {         // Full with the picture not loaded (yet)
       g.setColor(skyFill());
       g.fillRect(0, 0, sw, sh);
       return;
@@ -1937,14 +2004,14 @@ final class Game extends GameCanvas implements Runnable {
     if (landscape || detail == FULL || ramSaver || testMode || (viewTop >> 1) < hh) { statusDraw(g); return; }
     int tl = (int) ((timeEnd - now) / 1000);
     if (tl < 0) tl = 0;
-    int sky = skyFill();
+    int sky = skyKey();
     boolean blink = endSequence == 0 && timeEnd - now <= TIME_WARNING && (frameCounter % 10) >= 5;
     int flags = (showFps ? 1 : 0) | (blink ? 2 : 0) | (endSequence == 0 && now >= timeEnd ? 4 : 0) | (detail << 3);
     if (hudImg == null || hudImg.getWidth() != sw || hudImg.getHeight() != hh) { hudImg = Image.createImage(sw, hh); hudFlags = -1; }
     if (sky != hudSky || score != hudScore || tl != hudTl || distros != hudCoins || lives != hudLives || flags != hudFlags
         || (showFps && fpsText != hudFps)) {
       Graphics hg = hudImg.getGraphics();
-      hg.setColor(sky); hg.fillRect(0, 0, sw, hh);
+      fillSky(hg, 0, 0, sw, hh, 0);
       statusDraw(hg);
       hudSky = sky; hudScore = score; hudTl = tl; hudCoins = distros; hudLives = lives; hudFlags = flags; hudFps = fpsText;
     }

@@ -7,7 +7,9 @@
 //   Normal  stop, rewind and restart the effect every time (the original behaviour)
 //   Fast    only start a player that isn't already playing: no stop or rewind call (MMAPI rewinds a
 //           player that reached the end by itself), and an effect still playing is not cut off
-//   MIDI    notes sent to one prefetched MIDI player (MIDIControl): no player is started at all
+//   MIDI    notes sent to one prefetched MIDI player (MIDIControl): no player is started at all;
+//           phones without MIDIControl get the Tones version
+//   Tones   the same notes as plain beeps (Manager.playTone): no player at all, works on any MIDP 2
 //   Nokia   the WAVs through Nokia's own sound API (com.nokia.mid.sound) instead of MMAPI
 //   Off     no effects (music is separate)
 import java.io.ByteArrayInputStream;
@@ -21,13 +23,13 @@ final class Sound implements Runnable {
       SQUISH = 7, FALL = 8, RICOCHET = 9, BUMP_UPGRADE = 10, UPGRADE = 11, EXCELLENT = 12, COFFEE = 13,
       SHOOT = 14, LIFEUP = 15, STOMP = 16, KICK = 17, EXPLODE = 18, WARP = 19, COUNT = 20;
 
-  static final int NORMAL = 0, FAST = 1, MIDI = 2, NOKIA = 3, OFF = 4;
-  static final String[] MODES = { "Normal", "Fast", "MIDI", "Nokia", "Off" };
+  static final int NORMAL = 0, FAST = 1, MIDI = 2, TONES = 3, NOKIA = 4, OFF = 5;
+  static final String[] MODES = { "Normal", "Fast", "MIDI", "Tones", "Nokia", "Off" };
 
   // MIDI versions: note, length pairs (MIDI note numbers, 60 = middle C; length in units of about
   // 31 ms). Notes above 127 are drums: 128 + General MIDI drum note, played on channel 10.
   private static final int D = 128;
-  private static final int[][] TONES = {
+  private static final int[][] NOTES = {
     { 72, 2, 79, 3 },                        // jump
     { 67, 2, 74, 4 },                        // big jump
     { D + 42, 2 },                           // skid: hi-hat
@@ -100,7 +102,7 @@ final class Sound implements Runnable {
       }
       if (m == NORMAL) startNormal(n);
       else if (m == FAST) startFast(n);
-      else if (m == MIDI) playMidi(n);
+      else if (m == MIDI || m == TONES) playMidi(n);
       else if (m == NOKIA) playNokia(n);
     }
   }
@@ -194,16 +196,23 @@ final class Sound implements Runnable {
 
   // plays the notes one after another on this (the sound) thread
   private void playMidi(int n) {
-    MidiSfx s = midi;
-    if (s == null) return;
-    int[] t = TONES[n];
+    MidiSfx s = mode == MIDI ? midi : null;    // no MIDIControl (or Tones): beeps instead
+    int m = mode;
+    int[] t = NOTES[n];
     for (int i = 0; i < t.length; i += 2) {
-      int note = t[i], ch = 0;
+      int note = t[i], ch = 0, ms = t[i + 1] * 31;
       if (note >= D) { note -= D; ch = 9; }
-      s.note(ch, note, true);
-      try { Thread.sleep(t[i + 1] * 31); } catch (InterruptedException e) { }
-      s.note(ch, note, false);
-      if (mode != MIDI) return;
+      if (s != null) {
+        s.note(ch, note, true);
+        try { Thread.sleep(ms); } catch (InterruptedException e) { }
+        s.note(ch, note, false);
+      } else {
+        // a drum becomes a short low blip; playTone returns at once, so wait out the note here
+        if (ch == 9) { note = 40 + (note & 7); ms = Math.min(ms, 40); }
+        try { Manager.playTone(note, ms, 70); } catch (Throwable e) { }
+        try { Thread.sleep(ms); } catch (InterruptedException e) { }
+      }
+      if (mode != m) return;
     }
   }
 

@@ -308,6 +308,11 @@ final class Editor {
     if (!left && leftHeld) buttonUp();
     if (right && !rightHeld && vmX >= px()) { int b = buttonAt(vmX, vmY); if (b >= 0) { hoverButton = b; showInfo = true; } }
     leftHeld = left; rightHeld = right;
+    if (game.touchKeys != 0 && vmX < px()) {     // finger near the level's edge: scroll that way
+      int old = posX;
+      if (vmX < 10) posX -= 16; else if (vmX >= px() - 10) posX += 16;
+      if (posX != old) { clampPos(); motion(0, 0); scrolling = true; }
+    }
     if (leftHeld && vmX < px() && !selectObject && curIsTile) change();
   }
 
@@ -352,7 +357,12 @@ final class Editor {
         if (posX < 0) posX = 0;
         x = (col * 32 - posX) / 2 + 2;
       }
-      if (x >= panel) x = panel + 8;
+      if (x >= panel) {
+        // past the right edge: scroll the level a tile; at the level's end, into the button bar
+        int max = lv.width * 32 + BAR * 2 - game.sw * 2;
+        if (dx > 0 && posX < max) { posX = Math.min(max, posX + 32); x = (col * 32 - posX) / 2 + 2; }
+        if (x >= panel) x = panel + 8;
+      }
       vmX = x;
     } else if (dy != 0 && dx == 0) {
       // over the bar: jump to the next button above or below in this column
@@ -876,6 +886,16 @@ final class Editor {
     Res.chars(g, b >= B_BG && b == B_BG + activeTm ? Res.BLUE : Res.BLACK, t, r[0] + (r[2] - t.length() * 8) / 2, r[1] + (r[3] - 9) / 2 + 1);
   }
 
+  // portrait: a tap or drag on the minimap under the level centres the view there
+  void minimapTouch(int x) {
+    if (lv == null) return;
+    int p = px(), mw = Math.min(lv.width * 2, p), left = (p - mw) / 2;
+    int col = (x - left) * lv.width / Math.max(1, mw);
+    posX = col * 32 - p;               // the view is p screen pixels = p * 2 world units wide
+    clampPos();
+    motion(0, 0);
+  }
+
   void drawMinimap(Graphics g, int y0) {
     int p = px();
     int mw = Math.min(lv.width * 2, p), left = (p - mw) / 2;
@@ -926,7 +946,7 @@ final class Editor {
     String[] keys = {
       "2468 / joy move pointer",
       "5 / centre click, hold: paint",
-      "1 / 3      scroll the level",
+      game.rotate ? "1 / 7      scroll the level" : "1 / 3      scroll the level",
       "# + move   drag the level",
       "0          grid on/off",
       "*          this help",
@@ -935,6 +955,7 @@ final class Editor {
     String[] para = {
       "TileGroup / Objects: pick what to place. BkGrd, IntAct, FrGrd: the layer (background, interactive, foreground). Only IntAct tiles touch Tux.",
       "Wrench: level settings, length. Penguin: test the level. Arrows: next / previous level. # on a button: its name.",
+      "Moving the pointer past the right edge scrolls too. Touch: hold near an edge to scroll, or tap the map under the level.",
       "Typing: multi-tap, * = case, # or C deletes.",
     };
     int y = 30;

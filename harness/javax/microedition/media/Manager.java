@@ -2,6 +2,7 @@ package javax.microedition.media;
 // Desktop test stand-in: records what would play.
 public class Manager {
   public static String last;
+  public static void playTone(int note, int ms, int vol) throws MediaException { }
   public static Player createPlayer(java.io.InputStream in, String type) throws MediaException {
     last = type;
     return new Player() {
