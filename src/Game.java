@@ -111,7 +111,7 @@ final class Game extends GameCanvas implements Runnable {
   static final int M_START = 1, M_CONTRIB = 2, M_OPTIONS = 3, M_CONTROLS = 4, M_CREDITS = 5, M_QUIT = 6,
       M_SOUND = 10, M_MUSIC = 11, M_FPS = 12, M_LANDSCAPE = 13, M_TOUCH = 14, M_CONTINUE = 20, M_ABORT = 21,
       M_WM_RETURN = 30, M_WM_QUIT = 31, M_YES = 41, M_NO = 40, M_EDITOR = 7, M_KEYS = 50, M_HSNAME = 60,
-      M_STORY = 999, M_DETAIL = 15, M_FPSCAP = 16, M_RAM = 17;   // above any level number in a subset's level list
+      M_STORY = 999, M_DETAIL = 15, M_FPSCAP = 16, M_RAM = 17, M_OPTHELP = 18;   // above any level number in a subset's level list
   Menu mainMenu, optionsMenu, loadGameMenu, contribMenu, gameMenu, worldmapMenu, confirmMenu, keysMenu,
       contribSubsetMenu, highscoreMenu;
   String[] contribSubsets; int contribSubset;
@@ -298,6 +298,7 @@ final class Game extends GameCanvas implements Runnable {
         .add(Menu.TOGGLE, "Landscape ", M_LANDSCAPE, null, landscape)
         .add(Menu.TOGGLE, "Show touch", M_TOUCH, null, showTouch)
         .add(Menu.GOTO, "Keyboard Setup", 0, keysMenu = new Menu(), false)
+        .add(Menu.GOTO, "Option Help", M_OPTHELP, null, false)    // no target: opens the help pages
         .add(Menu.HL, "", 0).add(Menu.BACK, "Back", 0);
     optionsMenu.setList(M_SOUND, Sound.MODES, sounds.mode);
     optionsMenu.setList(M_MUSIC, MUSIC_MODES, musicMode());
@@ -420,6 +421,7 @@ final class Game extends GameCanvas implements Runnable {
       saveSettings();
     }
     if (optionsMenu.check() < 0) return;
+    if (optionsMenu.check() == M_OPTHELP) { helpOpen = true; helpPage = 0; return; }
 
     if (ramSaver != optionsMenu.isToggled(M_RAM)) {
       ramSaver = !ramSaver;
@@ -705,6 +707,61 @@ final class Game extends GameCanvas implements Runnable {
         : "Change them in Options > Keyboard Setup", sw / 8);
     for (int i = 0; i < hint.length; i++) Res.text(g, Res.WHITE, hint[i], 0, top + 180 + i * 10, 1);
     Res.text(g, Res.WHITE, "Press any key", 0, top + 215, 1);
+  }
+
+  // ---------------- Options > Option Help ----------------
+  // what each option does, a page per option like the Controls screen: name, then one line per choice
+  static final String[][] HELP = {
+    { "Sound",
+      "Normal|Every sound effect, like the original.",
+      "Fast|An effect still playing isn't restarted. Fewer stalls.",
+      "MIDI|Effects as short MIDI notes. For phones that freeze when a sound plays.",
+      "Nokia|Effects through Nokia's own sound system. Try it on Nokia phones that freeze.",
+      "Off|No sound effects." },
+    { "Music",
+      "Normal|MP3 recordings of the original songs (MIDI on phones without MP3).",
+      "MIDI|Chiptune MIDI versions. Much lighter on slow phones.",
+      "Off|No music." },
+    { "Detail",
+      "Full|Everything, like SuperTux 0.1.3.",
+      "Low|Plain sky instead of the background picture, no snow or clouds. Faster.",
+      "Potato|Also no animations or effects; defeated enemies vanish. Fastest." },
+    { "FPS cap",
+      "Max|Up to 33 frames a second.",
+      "25, 20, 15|Fewer frames give the phone spare time, which can smooth out sound and music." },
+    { "RAM saver",
+      "On|Uses less memory and looks the same, but runs a bit slower. For phones that crash or lose sounds when memory runs out.",
+      "Off|Keeps pictures ready in memory for speed." },
+    { "Other options",
+      "Show FPS|Frames per second under the score.",
+      "Landscape|The 320x240 layout. On an upright phone it is turned sideways.",
+      "Show touch|On-screen buttons and a MENU box for touch screens.",
+      "Keyboard Setup|Pick the key for each action." }
+  };
+  boolean helpOpen; int helpPage;
+
+  void helpInput(int ev) {
+    if ((ev & K_ESC) != 0) { helpOpen = false; return; }
+    if ((ev & (K_LEFT | K_UP)) != 0) { if (helpPage > 0) helpPage--; return; }
+    if ((ev & (K_SELECT | K_RIGHT | K_DOWN | K_FIRE)) != 0 && ++helpPage >= HELP.length) helpOpen = false;
+  }
+
+  void drawHelp(Graphics g) {
+    drawPicture(g, Pic.BG_TITLE);
+    Res.fillAlpha(g, 0, 0, sw, sh, 0xc8000000);
+    int top = landscape ? 0 : 20, per = sw / 8 - 2;
+    String[] p = HELP[helpPage];
+    Res.textCentered(g, Res.BLUE, "- " + p[0] + " -", sw / 2, top + 12, 2);
+    int y = top + 36;
+    for (int i = 1; i < p.length; i++) {
+      int bar = p[i].indexOf('|');
+      Res.text(g, Res.GOLD, p[i].substring(0, bar), 5, y, 1);
+      String[] l = wrap(p[i].substring(bar + 1), per);
+      for (int j = 0; j < l.length; j++) Res.text(g, Res.WHITE, l[j], 13, y + 11 + j * 10, 1);
+      y += 11 + l.length * 10 + 6;
+    }
+    Res.text(g, Res.WHITE, "Page " + (helpPage + 1) + "/" + HELP.length, 0, sh - 22, 1);
+    Res.text(g, Res.WHITE, landscape ? "5: next page   * or #: close" : "5 next page, * close", 0, sh - 11, 1);
   }
 
   // ---------------- level flow ----------------
@@ -1273,6 +1330,7 @@ final class Game extends GameCanvas implements Runnable {
   // one finger: turns taps into the same presses and held keys the keypad gives
   int touch(int type, int x, int y) {
     lastTouchX = x; lastTouchY = y;
+    if (helpOpen) return type == T_PRESS ? K_SELECT | K_ANY : 0;     // a tap turns the page
     Menu m = Menu.current;
     if (type == T_RELEASE) { touchKeys = 0; return 0; }
     if (m != null && state != NOTICE) {
@@ -1388,6 +1446,7 @@ final class Game extends GameCanvas implements Runnable {
       }
       ev |= touch(t, x, y);
     }
+    if (helpOpen) { helpInput(ev); return; }          // everything else waits behind the help pages
     frameStates(dt, ev);
     if (state != fadeState) {
       if (!(fadeState == INTRO && state == PLAY) && state != LOADING && fadeState != LOADING) fadeStart = System.currentTimeMillis();
@@ -1497,6 +1556,7 @@ final class Game extends GameCanvas implements Runnable {
 
   void draw(Graphics g) {
     g.setClip(0, 0, sw, sh);
+    if (helpOpen) { drawHelp(g); return; }
     if (state == ERROR) {
       g.setColor(0); g.fillRect(0, 0, sw, sh);
       int per = sw / 8 - 1, y = 2;

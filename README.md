@@ -38,6 +38,8 @@ More options for slow phones:
 
 The MIDI versions of the tracker songs (lite jar, Music: MIDI, phones without MP3) now have a softer chiptune sound.
 
+Options > Option Help explains every option on a few pages, like the Controls screen.
+
 With Show touch on, a MENU box under the lives pauses the game; a stray tap on the level no longer does.
 
 Adventure To The New World (ATTNW) by Miksy91 is supported by the converter, but it's not in the released jars since its music and many of its backgrounds come from other games. With the mod's files, `tools/convert.py` and `build.sh` build `SuperTux.jar` (everything) and `SuperTux-ATTNW.jar` (the mod alone) yourself.
