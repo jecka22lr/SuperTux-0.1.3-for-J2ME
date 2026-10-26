@@ -707,7 +707,8 @@ final class Editor {
         objectsMenu.posX = sw - 64 - objectsMenu.width() / 4 + (int) Math.max(0, objectsEffect - t);
         objectsMenu.posY = objectsMenu.posYPortrait = 82 + objectsMenu.count * 12;
       }
-      m.draw(g, sw / 2, sh, !game.landscape, game.now);
+      // landscape: Level Settings sits over the map so its long fields stay clear of the button panel
+      m.draw(g, m == settingsMenu && game.landscape ? p / 2 : sw / 2, sh, !game.landscape, game.now);
     }
     // the pointer
     g.setClip(0, 0, sw, sh);
@@ -842,7 +843,7 @@ final class Editor {
     if (Menu.current != null) { }
     else if (sh <= 240) Res.text(g, Res.WHITE, "* for Help", 10, 215, 1);
     else Res.text(g, Res.WHITE, "* for Help", 10, 300, 1);
-    if (System.currentTimeMillis() < levelInfoEnd) Res.chars(g, Res.WHITE, lv.name, p / 2 - lv.name.length() * 4, 0);
+    if (Menu.current == null && System.currentTimeMillis() < levelInfoEnd) Res.chars(g, Res.WHITE, lv.name, p / 2 - lv.name.length() * 4, 0);
     // the button's name after hovering 1.5 s, or at once with #
     if (hoverButton >= 0 && Menu.current == null && (showInfo || System.currentTimeMillis() - hoverStart > 1500)) {
       String info = hoverButton >= B_PANEL ? (curGroup >= 0 ? groupNames[curGroup] : "BadGuy") : INFO[hoverButton];

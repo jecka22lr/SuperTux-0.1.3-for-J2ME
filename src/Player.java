@@ -245,10 +245,10 @@ final class Player extends Body {
       } else if (b.mode == BadGuy.FLAT) {
         // kicking a flat bad guy doesn't hurt
       } else if (b.mode == BadGuy.KICK) {
-        if (!check(invincibleT)) kill(KILL_SHRINK);
+        if (!check(invincibleT) && !game.dbgInvincible) kill(KILL_SHRINK);
         else b.killMe(25);           // falls off (Potato: vanishes), like any other knocked-out bad guy
       } else {
-        if (!check(invincibleT)) kill(KILL_SHRINK);
+        if (!check(invincibleT) && !game.dbgInvincible) kill(KILL_SHRINK);
         else b.killMe(25);
       }
       game.scoreMultiplier++;
@@ -277,11 +277,14 @@ final class Player extends Body {
 
   void checkBounds() {
     if (x < 0) x = 0;
-    if (y > 640) kill(KILL_KILL);
+    if (y > 640) {
+      if (game.dbgInvincible && dying == DYING_NOT) game.dbgPlace((int) x / 32 + 1);   // Debug Mode: out of the pit
+      else kill(KILL_KILL);
+    }
     if (x < game.scrollX && (!level.backScrolling || level.autoscroll != 0)) x = game.scrollX;
     if (level.autoscroll != 0) {
       if (x == game.scrollX)
-        if ((level.solid(x + 32, y) || (size != SMALL && !duck && level.solid(x + 32, y + 32))) && dying == DYING_NOT)
+        if ((level.solid(x + 32, y) || (size != SMALL && !duck && level.solid(x + 32, y + 32))) && dying == DYING_NOT && !game.dbgInvincible)
           kill(KILL_KILL);
       if (x + w > game.scrollX + game.viewW) x = game.scrollX + game.viewW - w;
     }

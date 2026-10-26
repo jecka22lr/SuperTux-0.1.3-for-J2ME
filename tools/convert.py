@@ -471,7 +471,8 @@ for fn in ('arctis', 'arctis2', 'arctis_dark', 'cave2', 'extro', 'ocean', 'oiltu
 with open(os.path.join(OUT, 'res', 'b', 'n.txt'), 'w') as f:
     for k in sorted(bgnames):
         if k != 'title': f.write('%d %s.png\n' % (bgnames[k], k))
-save_png(Image.open(os.path.join(SYM, 'images', 'status', 'numbers.png')).convert('RGBA'), os.path.join(OUT, 'res', 'nu.png'))
+# nu.png (the high score numbers) is back with the name entry in 1.3
+# save_png(Image.open(os.path.join(SYM, 'images', 'status', 'numbers.png')).convert('RGBA'), os.path.join(OUT, 'res', 'nu.png'))
 logo = Image.open(os.path.join(SYM, 'images', 'title', 'logo.png')).convert('RGBA')
 save_png(logo, os.path.join(OUT, 'res', 'lo.png'))
 with open(os.path.join(OUT, 'src', 'Spr.java'), 'a') as f:

@@ -75,7 +75,7 @@ public class UiShots {
         for (int i = 0; i < w.count; i++) if (w.ltitle[i].length() > w.ltitle[best].length()) best = i;
         w.tileX = w.lx[best]; w.tileY = w.ly[best];
         Menu.setCurrent(null, 0); shot("13map" + maps[mi]);
-        if (mi == 0) { Menu.setCurrent(g.worldmapMenu, 0); shot("14mappause"); Menu.setCurrent(null, 0); }
+        if (mi == 0) { Menu.setCurrent(g.worldmapMenu, 0); shot("14mappause"); g.openDebug(); shot("14mapdebug"); Menu.setCurrent(null, 0); }
       }
       // level: the longest level name in the jar for the intro, then play screens
       String[] longest = { "f2", "a1", "i24" };
@@ -93,9 +93,8 @@ public class UiShots {
       g.timeEnd = g.now + 100000;
       g.testMode = true; shot("19testplay"); g.testMode = false;
       g.showFps = false;
-      g.state = Game.GAMEOVER; g.hsName = "A very long name here"; g.hsScore = 999999; shot("20gameover");
-      g.hsCandidate = 1000000; g.enterTitle(); shot("21highscore");
-      Menu.setCurrent(null, 0); g.hsCandidate = -1;
+      g.state = Game.PLAY; Menu.setCurrent(g.gameMenu, 0); g.openDebug(); shot("21debug"); Menu.setCurrent(null, 0);
+      g.state = Game.GAMEOVER; shot("20gameover");
       g.showText("/x/credits", Pic.BG_TITLE, 2.4f, Game.AFTER_TITLE); g.textScroll = 600; shot("22credits");
       g.showText("/x/intro.txt", Pic.BG_ARCTIS2, 1.0f, Game.AFTER_TITLE); g.textScroll = 200; shot("23intro");
       if (Editor.PACK_STORY.length > 0 && Editor.PACK_STORY[0] != null) { g.showText(Editor.PACK_STORY[0], Pic.BG_OILTUX, 1.0f, Game.AFTER_TITLE); g.textScroll = 200; shot("24story"); }

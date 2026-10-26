@@ -122,7 +122,7 @@ final class WorldMap {
     if (!moving) {
       if (tuxInput != D_NONE) {
         int l = atLevel();
-        if ((l < 0 || solved[l] || lid[l].length() == 0) && pathOk(tuxInput, tileX, tileY)) {
+        if ((l < 0 || solved[l] || lid[l].length() == 0 || game.dbgWalk) && pathOk(tuxInput, tileX, tileY)) {
           tileX = nx(tileX, tuxInput); tileY = ny(tileY, tuxInput);
           moving = true; direction = tuxInput; backDirection = reverse(direction);
         } else if (tuxInput == backDirection) {

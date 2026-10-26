@@ -25,7 +25,7 @@ final class Game extends GameCanvas implements Runnable {
 
   // states
   static final int PLAY = 0, INTRO = 1, GAMEOVER = 2, ERROR = 4, TITLE = 5, WORLDMAP = 6, TEXT = 7,
-      CONTROLS = 8, LOADING = 9, EDITOR = 10, HIGHSCORE = 11, NOTICE = 12, ABOUT = 13, AUDIOINFO = 14;
+      CONTROLS = 8, LOADING = 9, EDITOR = 10, NOTICE = 12, ABOUT = 13, AUDIOINFO = 14;
 
   final SuperTux midlet;
   volatile boolean running = true;
@@ -110,10 +110,12 @@ final class Game extends GameCanvas implements Runnable {
   // menus (setup.cpp)
   static final int M_START = 1, M_CONTRIB = 2, M_OPTIONS = 3, M_CONTROLS = 4, M_CREDITS = 5, M_QUIT = 6,
       M_SOUND = 10, M_MUSIC = 11, M_FPS = 12, M_LANDSCAPE = 13, M_TOUCH = 14, M_CONTINUE = 20, M_ABORT = 21,
-      M_WM_RETURN = 30, M_WM_QUIT = 31, M_YES = 41, M_NO = 40, M_EDITOR = 7, M_KEYS = 50, M_HSNAME = 60,
-      M_STORY = 999, M_DETAIL = 15, M_FPSCAP = 16, M_RAM = 17, M_OPTHELP = 18, M_DRAWCAP = 19, M_ABOUT = 8, M_SFXFMT = 22, M_PAUSEMUS = 23, M_AUDIOINFO = 9;   // above any level number in a subset's level list
+      M_WM_RETURN = 30, M_WM_QUIT = 31, M_YES = 41, M_NO = 40, M_EDITOR = 7, M_KEYS = 50,
+      M_STORY = 999, M_DETAIL = 15, M_FPSCAP = 16, M_RAM = 17, M_OPTHELP = 18, M_DRAWCAP = 19, M_ABOUT = 8, M_SFXFMT = 22, M_PAUSEMUS = 23, M_AUDIOINFO = 9,
+      M_DBG_INV = 70, M_DBG_TIME = 71, M_DBG_TUX = 72, M_DBG_LIVES = 75, M_DBG_KILL = 76,
+      M_DBG_END = 77, M_DBG_FINISH = 78, M_DBG_WALK = 79, M_DBG_SOLVE = 80, M_DBG_SOLVEALL = 81;   // above any level number in a subset's level list
   Menu mainMenu, optionsMenu, loadGameMenu, contribMenu, gameMenu, worldmapMenu, confirmMenu, keysMenu,
-      contribSubsetMenu, highscoreMenu;
+      contribSubsetMenu;
   String[] contribSubsets; int contribSubset;
   int confirmSlot;
   // the worlds this jar has (x/g.txt, written by tools/convert.py): Start Game worlds, each with
@@ -323,9 +325,6 @@ final class Game extends GameCanvas implements Runnable {
         .add(Menu.ACTION, "Default Keys", M_KEYS + 9).add(Menu.BACK, "Back", 0);
     showKeys();
     contribSubsetMenu = new Menu();
-    highscoreMenu = new Menu();
-    highscoreMenu.posY = 320; highscoreMenu.posYPortrait = 420;
-    highscoreMenu.add(Menu.TEXTFIELD, "Enter your name:", M_HSNAME);
     loadGameMenu.add(Menu.LABEL, "Start Game", 0).add(Menu.HL, "", 0);
     for (int i = 1; i <= 5; i++) loadGameMenu.add(Menu.DEACTIVE, "Slot " + i, i);
     loadGameMenu.add(Menu.HL, "", 0).add(Menu.BACK, "Back", 0);
@@ -336,6 +335,111 @@ final class Game extends GameCanvas implements Runnable {
     worldmapMenu.add(Menu.LABEL, "Pause", 0).add(Menu.HL, "", 0)
         .add(Menu.ACTION, "Continue", M_WM_RETURN).add(Menu.GOTO, "Options", 0, optionsMenu, false)
         .add(Menu.HL, "", 0).add(Menu.ACTION, "Quit Game", M_WM_QUIT);
+    debugMenu = new Menu(); debugMapMenu = new Menu();
+    debugMenu.add(Menu.LABEL, "Debug Mode", 0).add(Menu.HL, "", 0)
+        .add(Menu.TOGGLE, "Invincible", M_DBG_INV).add(Menu.TOGGLE, "Freeze time", M_DBG_TIME)
+        .add(Menu.STRINGSELECT, "Tux    ", M_DBG_TUX)
+        .add(Menu.ACTION, "99 Lives", M_DBG_LIVES).add(Menu.ACTION, "Defeat Enemies", M_DBG_KILL)
+        .add(Menu.ACTION, "Warp To End", M_DBG_END).add(Menu.ACTION, "Finish Level", M_DBG_FINISH)
+        .add(Menu.HL, "", 0).add(Menu.BACK, "Back", 0);
+    debugMenu.setList(M_DBG_TUX, DBG_TUX, 0);
+    debugMapMenu.add(Menu.LABEL, "Debug Mode", 0).add(Menu.HL, "", 0)
+        .add(Menu.TOGGLE, "Walk past levels", M_DBG_WALK).add(Menu.ACTION, "Solve This Level", M_DBG_SOLVE)
+        .add(Menu.ACTION, "Solve All Levels", M_DBG_SOLVEALL).add(Menu.ACTION, "99 Lives", M_DBG_LIVES)
+        .add(Menu.HL, "", 0).add(Menu.BACK, "Back", 0);
+  }
+
+  // ---------------- Debug Mode ----------------
+  // cheats, from the pause menu (level or world map): Up Up Down Down Left Right Left Right, or tap
+  // the Pause title 7 times. They last until the title screen and are never saved.
+  static final int[] DBG_COMBO = { K_UP, K_UP, K_DOWN, K_DOWN, K_LEFT, K_RIGHT, K_LEFT, K_RIGHT };
+  static final String[] DBG_TUX = { "Small", "Big", "Fire" };
+  Menu debugMenu, debugMapMenu;
+  int dbgStep, dbgTaps; long dbgTapT;
+  boolean dbgInvincible, dbgFreeze, dbgWalk;
+
+  void dbgKeys(int ev) {
+    int d = ev & (K_UP | K_DOWN | K_LEFT | K_RIGHT | K_SELECT | K_ESC);
+    if (d == 0) return;
+    if (d == DBG_COMBO[dbgStep]) {
+      if (++dbgStep == DBG_COMBO.length) { dbgStep = 0; openDebug(); }
+    } else dbgStep = d == K_UP ? (dbgStep == 2 ? 2 : 1) : 0;
+  }
+
+  // touch: taps on the pause menu's title, 7 within 3 seconds
+  boolean dbgTap(Menu m, int x, int y) {
+    if (m.itemY.length == 0 || x < m.boxX || x >= m.boxX + m.boxW || y < m.itemY[0] - 8 || y >= m.itemY[0] + 8) return false;
+    long t = System.currentTimeMillis();
+    if (t - dbgTapT > 3000) dbgTaps = 0;
+    dbgTapT = t;
+    if (++dbgTaps >= 7) { dbgTaps = 0; openDebug(); }
+    return true;
+  }
+
+  void openDebug() {
+    debugMenu.setToggled(M_DBG_INV, dbgInvincible); debugMenu.setToggled(M_DBG_TIME, dbgFreeze);
+    debugMapMenu.setToggled(M_DBG_WALK, dbgWalk);
+    debugMenu.setList(M_DBG_TUX, DBG_TUX, tuxForm());
+    Menu.push(state == WORLDMAP ? debugMapMenu : debugMenu, now);
+  }
+
+  void resetDebug() { dbgInvincible = dbgFreeze = dbgWalk = false; dbgStep = dbgTaps = 0; }
+
+  // returns true when the level was left
+  boolean debugAction(int id) {
+    Player t = tux;
+    switch (id) {
+      case M_DBG_INV: dbgInvincible = debugMenu.isToggled(M_DBG_INV); break;
+      case M_DBG_TIME: dbgFreeze = debugMenu.isToggled(M_DBG_TIME); break;
+      case M_DBG_LIVES: lives = MAX_LIVES; break;
+      case M_DBG_KILL:
+        for (int i = 0; i < badguys.size(); i++) {
+          BadGuy b = (BadGuy) badguys.elementAt(i);
+          if (b.dying == BadGuy.DYING_NOT) b.killMe(0);
+        }
+        Menu.setCurrent(null, now); break;
+      case M_DBG_END:
+        dbgPlace(level.width - 12); Menu.setCurrent(null, now); break;
+      case M_DBG_FINISH: levelExit(WorldMap.ES_FINISHED); return true;
+      case M_DBG_WALK: dbgWalk = debugMapMenu.isToggled(M_DBG_WALK); break;
+      case M_DBG_SOLVE: {
+        int l = worldmap.atLevel();
+        if (l >= 0 && worldmap.lid[l].length() > 0) { worldmap.solved[l] = true; worldmap.save(); }
+        break;
+      }
+      case M_DBG_SOLVEALL:
+        for (int i = 0; i < worldmap.count; i++) if (worldmap.lid[i].length() > 0) worldmap.solved[i] = true;
+        worldmap.save(); break;
+    }
+    return false;
+  }
+
+  int tuxForm() { return tux.size == Player.SMALL ? 0 : tux.gotCoffee ? 2 : 1; }
+
+  // the Tux picker: Small, Big or Fire as soon as it changes
+  void dbgTux() {
+    int f = debugMenu.listOf(M_DBG_TUX);
+    if (f == tuxForm()) return;
+    Player t = tux;
+    if (f == 0) { if (t.size == Player.BIG) { t.size = Player.SMALL; t.h = 32; t.duck = false; t.y += 32; t.syncOld(); } }
+    else t.grow();
+    t.gotCoffee = f == 2;
+  }
+
+  // puts Tux on the first ground at or after column c with room above him (Invincible's pit rescue,
+  // Warp To End)
+  void dbgPlace(int c) {
+    Player t = tux;
+    for (int x = Math.max(0, c); x < level.width; x++)
+      for (int y = 2; y < Level.H; y++) {
+        int cx = x * 32 + 16;
+        if (level.solid(cx, y * 32 + 16) && !level.solid(cx, y * 32 - 16) && !level.solid(cx, y * 32 - 48)
+            && (t.size == Player.SMALL || !level.solid(cx, y * 32 - 80))) {
+          t.x = x * 32; t.y = y * 32 - t.h - 1; t.setVelocity(0, 0); t.syncOld();
+          return;
+        }
+      }
+    if (c > 0) dbgPlace(0);
   }
 
   // Potato and Max Potato leave the credit lines off the title screen and show them on an About
@@ -538,14 +642,7 @@ final class Game extends GameCanvas implements Runnable {
 
   // ---------------- title screen ----------------
   void enterTitle() {
-    if (hsCandidate > hsScore) {             // save_hs: a new high score asks for a name first
-      hsScore = hsCandidate; hsCandidate = -1;
-      highscoreMenu.setInput(M_HSNAME, hsName);
-      state = HIGHSCORE; music.stop(); music.type = Music.NONE;
-      Menu.setCurrent(highscoreMenu, now);
-      return;
-    }
-    hsCandidate = -1;
+    resetDebug();
     state = TITLE;
     worldmap = null;
     levelId = "m1"; demo = true;
@@ -938,7 +1035,7 @@ final class Game extends GameCanvas implements Runnable {
       level = null; tcLevel = null; tc = null; tcG = null; touchImg = null; hudImg = null; gradImg = null; logoStrip = null;
       bgImage = null; bgTall = null;     // loadBackground loads it again (the sky colour stays)
       if (!demo) logoImg = null;
-      numbersImg = null; textImg = null; textTall = null; textImgNo = -1;
+      textImg = null; textTall = null; textImgNo = -1;
       System.gc();
     }
     try {
@@ -1026,7 +1123,6 @@ final class Game extends GameCanvas implements Runnable {
       state = EDITOR; Menu.setCurrent(null, now);
       return;
     }
-    if (status == WorldMap.ES_GAME_OVER) hsCandidate = score;
     if (worldmap == null) { singleLevel = false; resetStatus(); enterTitle(); return; }
     boolean quit = worldmap.levelDone(status, coffee, big);
     if (state == TEXT) return;              // extro and credits
@@ -1073,6 +1169,7 @@ final class Game extends GameCanvas implements Runnable {
 
   void addScore(float sx, float y, int s) {
     score += s;
+    if (s == 0) return;               // Debug Mode's Defeat Enemies: no floating 0s
     for (int i = 0; i < NE; i++) if (fsEnd[i] == 0) {
       fsX[i] = sx; fsY[i] = y - 16; fsEnd[i] = now + 1000; fsText[i] = String.valueOf(s); return;
     }
@@ -1516,6 +1613,7 @@ final class Game extends GameCanvas implements Runnable {
     if (type == T_RELEASE) { touchKeys = 0; return 0; }
     if (m != null && state != NOTICE) {
       if (type != T_PRESS) return 0;
+      if ((m == gameMenu || m == worldmapMenu) && dbgTap(m, x, y)) return 0;
       int i = m.itemAt(x, y);
       if (i >= 0) {
         m.active = i;
@@ -1653,21 +1751,16 @@ final class Game extends GameCanvas implements Runnable {
   void frameStates(long dt, int ev) {
     if (state == NOTICE) { if (ev != 0 || System.currentTimeMillis() >= stateT) state = TITLE; return; }
     if (state == EDITOR) { now += dt; frameCounter = (int) (now / 25); editor.frame(dt, ev); return; }
-    if (state == HIGHSCORE) {
-      Menu m = Menu.current;
-      if (m == null || (ev & K_SOFT) != 0) { hsName = highscoreMenu.inputOf(M_HSNAME); saveSettings(); enterTitle(); return; }
-      m.action(menuAction(ev), now);
-      if (m.check() == M_HSNAME) { hsName = highscoreMenu.inputOf(M_HSNAME); saveSettings(); enterTitle(); }
-      return;
-    }
     if (state == PLAY) {
       Menu m = Menu.current;
       if (testMode && (ev & K_ESC) != 0) { levelExit(WorldMap.ES_ABORT); return; }
       if (m == null && (ev & K_ESC) != 0) { Menu.setCurrent(gameMenu, now); return; }
       if (m != null) {                 // game_menu: time stops
         if ((ev & K_ESC) != 0) { Menu.pop(now); return; }
+        if (m == gameMenu) dbgKeys(ev);
         m.action(menuAction(ev), now);
         if (m == gameMenu && gameMenu.check() == M_ABORT) { levelExit(WorldMap.ES_ABORT); return; }
+        if (m == debugMenu) { dbgTux(); if (debugAction(debugMenu.check())) return; }
         if (m == optionsMenu) optionsChanged();
         if (m == keysMenu) keysChanged();
         return;
@@ -1680,6 +1773,7 @@ final class Game extends GameCanvas implements Runnable {
         if (endSequence == 1) action(dt / 20f);
         else if (endSequence == 0) action(dt / 10f);
         if (endSequence == 0) {
+          if (dbgFreeze) timeEnd = now + Math.max(1, (timeEnd - now + 999) / 1000) * 1000;   // the clock stands still
           if (now >= timeEnd && tux.dying == Player.DYING_NOT) tux.kill(Player.KILL_KILL);
           if (tux.check(tux.invincibleT)) { if (music.type != Music.HERRING) music.play(Music.HERRING); }
           else if (timeEnd - now < TIME_WARNING) { if (music.type != Music.HURRYUP) music.play(Music.HURRYUP); }
@@ -1714,8 +1808,10 @@ final class Game extends GameCanvas implements Runnable {
       worldmap.update(delta, m == null && (ev & (K_SELECT | K_FIRE)) != 0);
       if (state != WORLDMAP) return;
       if (m != null) {
+        if (m == worldmapMenu) dbgKeys(ev);
         m.action(menuAction(ev), now);
         if (m == worldmapMenu && worldmapMenu.check() == M_WM_QUIT) { enterTitle(); return; }
+        if (m == debugMapMenu) debugAction(debugMapMenu.check());
         if (m == optionsMenu) optionsChanged();
         if (m == keysMenu) keysChanged();
       }
@@ -1774,7 +1870,6 @@ final class Game extends GameCanvas implements Runnable {
       return;
     }
     if (state == EDITOR) { editor.draw(g); return; }
-    if (state == HIGHSCORE) { drawHighscore(g); return; }
     if (state == TEXT) { drawText(g); return; }
     if (state == CONTROLS) { drawControls(g); return; }
     if (state == ABOUT) { drawAbout(g); return; }
@@ -1826,21 +1921,6 @@ final class Game extends GameCanvas implements Runnable {
   void fade(Graphics g) {
     long t = System.currentTimeMillis() - fadeStart;
     if (detail < POTATO && t >= 0 && t < 300) Res.fillAlpha(g, 0, 0, sw, sh, (int) (255 * (300 - t) / 300) << 24);
-  }
-
-  // save_hs: "Congratulations", the score in the big yellow numbers, and the name
-  Image numbersImg;
-  void drawHighscore(Graphics g) {
-    drawPicture(g, Pic.BG_TITLE);
-    int top = landscape ? 0 : 40;
-    Res.textCentered(g, Res.BLUE, "Congratulations", sw / 2, top + 65, 2);
-    Res.textCentered(g, Res.BLUE, "Your score:", sw / 2, top + 85, 1);
-    if (numbersImg == null) { try { numbersImg = Image.createImage("/nu.png"); } catch (Exception e) { numbersImg = Image.createImage(1, 1); } }
-    String n = String.valueOf(hsScore);
-    int x = sw / 2 - n.length() * 16;
-    for (int i = 0; i < n.length(); i++)
-      if (numbersImg.getWidth() >= 320) g.drawRegion(numbersImg, (n.charAt(i) - '0') * 32, 0, 32, 32, 0, x + i * 32, top + 97, Graphics.TOP | Graphics.LEFT);
-    if (Menu.current != null) Menu.current.draw(g, sw / 2, sh, !landscape, now);
   }
 
   void openEditor() {
@@ -2243,7 +2323,6 @@ final class Game extends GameCanvas implements Runnable {
       Res.textCentered(g, Res.BLUE, "GAMEOVER", cx, y);
       Res.textCentered(g, Res.GOLD, "SCORE: " + score, cx, y + 12);
       Res.textCentered(g, Res.GOLD, "COINS: " + distros, cx, y + 28);
-      centeredWrapped(g, Res.WHITE, "HIGH SCORE: " + hsName + " " + hsScore, cx, y + 60, 10);
     }
   }
 
@@ -2278,7 +2357,6 @@ final class Game extends GameCanvas implements Runnable {
   }
 
   void showExtro(String file) {
-    hsCandidate = score;
     showText(file, Pic.BG_EXTRO, 1.0f, AFTER_CREDITS);
     music.playFile("t", -1);
   }
