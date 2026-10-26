@@ -56,6 +56,27 @@ final class Menu {
 
   void clear() { count = 0; active = 0; }
 
+  // a new item right after the item with this id
+  void insertAfter(int after, int k, String t, int ident) {
+    int at = find(after) + 1;
+    if (at <= 0) at = count;
+    add(k, t, ident);
+    int last = count - 1;
+    for (int i = last; i > at; i--) swap(i, i - 1);
+  }
+
+  private void swap(int a, int b) {
+    String s = text[a]; text[a] = text[b]; text[b] = s;
+    s = input[a]; input[a] = input[b]; input[b] = s;
+    String[] l = list[a]; list[a] = list[b]; list[b] = l;
+    int v = listActive[a]; listActive[a] = listActive[b]; listActive[b] = v;
+    v = kind[a]; kind[a] = kind[b]; kind[b] = v;
+    v = id[a]; id[a] = id[b]; id[b] = v;
+    boolean z = toggled[a]; toggled[a] = toggled[b]; toggled[b] = z;
+    Menu m = target[a]; target[a] = target[b]; target[b] = m;
+    v = toggledCode[a]; toggledCode[a] = toggledCode[b]; toggledCode[b] = v;
+  }
+
   // touch: where the items were last drawn (screen pixels)
   int[] itemY = new int[0]; int boxX, boxY, boxW = -1, boxH;
 

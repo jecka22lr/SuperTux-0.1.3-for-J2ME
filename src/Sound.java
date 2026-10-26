@@ -53,6 +53,13 @@ final class Sound implements Runnable {
   };
 
   int mode = NORMAL;
+  // which WAV set: "/a/" 8-bit 11 kHz (the jars' own), or the test sets "/a16/" and "/a8/" (16-bit
+  // 16 or 8 kHz) when the jar has them (SFXTEST builds)
+  static final String[] FORMATS = { "8bit 11k", "16bit 16k", "16bit 8k" };
+  static final String[] FORMAT_DIRS = { "/a/", "/a16/", "/a8/" };
+  int format;
+  // how long the slowest sound start took in the last second (Show FPS shows it)
+  volatile int stallMs, stallMax;
   private int ready = -1;                    // the mode whose players are prepared
   private Player[] wav;
   private MidiSfx midi;
@@ -68,6 +75,13 @@ final class Sound implements Runnable {
   // start the worker, which prepares the players before playing anything
   void init() {
     if (thread == null) { thread = new Thread(this); thread.start(); }
+  }
+
+  // a different WAV set: the players are made again from it
+  void setFormat(int f) {
+    if (f == format || f < 0 || f >= FORMATS.length) return;
+    stop();
+    synchronized (this) { format = f; ready = -1; notify(); }
   }
 
   void setMode(int m) {
@@ -100,15 +114,27 @@ final class Sound implements Runnable {
         synchronized (this) { ready = m; qHead = qTail; }   // nothing queued meanwhile plays late
         continue;
       }
+      long t0 = System.currentTimeMillis();
       if (m == NORMAL) startNormal(n);
       else if (m == FAST) startFast(n);
       else if (m == MIDI || m == TONES) playMidi(n);
       else if (m == NOKIA) playNokia(n);
+      if (m != MIDI && m != TONES) {     // (MIDI and Tones sleep through their notes on purpose)
+        int ms = (int) (System.currentTimeMillis() - t0);
+        if (ms > stallMax) stallMax = ms;
+      }
     }
   }
 
   // make what the mode needs and free what it doesn't
+  private int preparedFormat;
   private void prepare(int m) {
+    if (format != preparedFormat) {      // another WAV set: drop the players made from the old one
+      if (wav != null) for (int i = 0; i < COUNT; i++) if (wav[i] != null) { try { wav[i].close(); } catch (Throwable e) { } }
+      wav = null; last = null;
+      if (nokia != null) { nokia.release(); nokia = null; }
+      preparedFormat = format;
+    }
     if (m != NORMAL && m != FAST && wav != null) {
       for (int i = 0; i < COUNT; i++)
         if (wav[i] != null) { try { wav[i].close(); } catch (Throwable e) { } }
@@ -140,7 +166,7 @@ final class Sound implements Runnable {
 
   private byte[] readWav(int n) {
     try {
-      InputStream in = getClass().getResourceAsStream("/a/" + n + ".wav");
+      InputStream in = getClass().getResourceAsStream(FORMAT_DIRS[format] + n + ".wav");
       if (in == null) return null;
       java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
       byte[] buf = new byte[2048];

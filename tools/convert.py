@@ -431,6 +431,14 @@ for i, n in enumerate(SOUNDS):
     import wave
     w = wave.open(os.path.join(OUT, 'res', 'a', '%d.wav' % i), 'wb')
     w.setnchannels(1); w.setsampwidth(1); w.setframerate(11025); w.writeframes(raw); w.close()
+    # test sets for phones that stall when a sound starts (S60 3rd Edition): 16-bit PCM at the
+    # rates the phone's audio hardware runs at natively, so nothing needs converting on the fly
+    for d, rate in (('a16', 16000), ('a8', 8000)):
+        os.makedirs(os.path.join(OUT, 'res', d), exist_ok=True)
+        raw = subprocess.run(['ffmpeg', '-hide_banner', '-v', 'error', '-i', os.path.join(SYM, 'sounds', n + '.wav'),
+                              '-ac', '1', '-ar', str(rate), '-f', 's16le', '-'], check=True, stdout=subprocess.PIPE).stdout
+        w = wave.open(os.path.join(OUT, 'res', d, '%d.wav' % i), 'wb')
+        w.setnchannels(1); w.setsampwidth(2); w.setframerate(rate); w.writeframes(raw); w.close()
 def picture(path, name):
     n = len(bgnames); bgnames[name] = n
     Image.open(path).convert('RGB').quantize(128).save(os.path.join(OUT, 'res', 'b', '%d.png' % n), optimize=True)

@@ -38,7 +38,7 @@ final class Game extends GameCanvas implements Runnable {
   // time
   long now;                 // game time in ms
   int frameCounter;         // 0.1.3's global_frame_counter (25 ms ticks)
-  int fpsCount; long fpsT, lastDraw; String fpsText = "0.0";
+  int fpsCount, worstFrame; long fpsT, lastDraw; String fpsText = "0.0";
 
   // layout
   boolean landscape;        // chosen layout
@@ -111,7 +111,7 @@ final class Game extends GameCanvas implements Runnable {
   static final int M_START = 1, M_CONTRIB = 2, M_OPTIONS = 3, M_CONTROLS = 4, M_CREDITS = 5, M_QUIT = 6,
       M_SOUND = 10, M_MUSIC = 11, M_FPS = 12, M_LANDSCAPE = 13, M_TOUCH = 14, M_CONTINUE = 20, M_ABORT = 21,
       M_WM_RETURN = 30, M_WM_QUIT = 31, M_YES = 41, M_NO = 40, M_EDITOR = 7, M_KEYS = 50, M_HSNAME = 60,
-      M_STORY = 999, M_DETAIL = 15, M_FPSCAP = 16, M_RAM = 17, M_OPTHELP = 18, M_DRAWCAP = 19, M_ABOUT = 8;   // above any level number in a subset's level list
+      M_STORY = 999, M_DETAIL = 15, M_FPSCAP = 16, M_RAM = 17, M_OPTHELP = 18, M_DRAWCAP = 19, M_ABOUT = 8, M_SFXFMT = 22;   // above any level number in a subset's level list
   Menu mainMenu, optionsMenu, loadGameMenu, contribMenu, gameMenu, worldmapMenu, confirmMenu, keysMenu,
       contribSubsetMenu, highscoreMenu;
   String[] contribSubsets; int contribSubset;
@@ -224,7 +224,7 @@ final class Game extends GameCanvas implements Runnable {
         landscape = b[0] != 0;
         music.enabled = b[1] != 0; music.midiOnly = b[1] == 2;
         if (b.length > 3) { sounds.mode = soundModeOf(b[2]); showFps = b[3] != 0; }
-        if (b.length > 4 && b[4] >= 2 && b[4] <= 7) {
+        if (b.length > 4 && b[4] >= 2 && b[4] <= 8) {
           java.io.DataInputStream in = new java.io.DataInputStream(new java.io.ByteArrayInputStream(b, 5, b.length - 5));
           for (int i = 0; i < 5; i++) keymapUp[i] = in.readInt();
           hsScore = in.readInt(); hsName = in.readUTF();
@@ -233,6 +233,7 @@ final class Game extends GameCanvas implements Runnable {
           if (b[4] >= 5) detail = Math.max(FULL, Math.min(MAXPOTATO, in.readByte()));
           if (b[4] >= 6) { fpsCap = Math.max(0, Math.min(FPSCAP_MS.length - 1, in.readByte())); ramSaver = in.readBoolean(); }
           if (b[4] >= 7) drawCap = Math.max(0, Math.min(DRAWCAP_MS.length - 1, in.readByte()));
+          if (b[4] >= 8) { int f = in.readByte(); if (f > 0 && f < Sound.FORMATS.length && getClass().getResourceAsStream(Sound.FORMAT_DIRS[f] + "0.wav") != null) sounds.format = f; }
         }
       }
     } catch (Throwable e) { }
@@ -253,7 +254,7 @@ final class Game extends GameCanvas implements Runnable {
       java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
       java.io.DataOutputStream out = new java.io.DataOutputStream(bo);
       out.writeByte(landscape ? 1 : 0); out.writeByte(!music.enabled ? 0 : music.midiOnly ? 2 : 1); out.writeByte(soundByte(sounds.mode));
-      out.writeByte(showFps ? 1 : 0); out.writeByte(7);
+      out.writeByte(showFps ? 1 : 0); out.writeByte(8);
       for (int i = 0; i < 5; i++) out.writeInt(keymapUp[i]);
       out.writeInt(hsScore); out.writeUTF(hsName);
       for (int i = 0; i < 5; i++) out.writeInt(keymapSide[i]);
@@ -261,6 +262,7 @@ final class Game extends GameCanvas implements Runnable {
       out.writeByte(detail);
       out.writeByte(fpsCap); out.writeBoolean(ramSaver);
       out.writeByte(drawCap);
+      out.writeByte(sounds.format);
       out.close();
       byte[] b = bo.toByteArray();
       RecordStore rs = RecordStore.openRecordStore("stux", true);
@@ -308,6 +310,10 @@ final class Game extends GameCanvas implements Runnable {
     optionsMenu.setList(M_DETAIL, DETAIL_MODES, detail);
     optionsMenu.setList(M_FPSCAP, FPSCAP_MODES, fpsCap);
     optionsMenu.setList(M_DRAWCAP, DRAWCAP_MODES, drawCap);
+    if (getClass().getResourceAsStream("/a16/0.wav") != null) {   // SFX format test build
+      optionsMenu.insertAfter(M_SOUND, Menu.STRINGSELECT, "SFX type  ", M_SFXFMT);
+      optionsMenu.setList(M_SFXFMT, Sound.FORMATS, sounds.format);
+    }
     keysMenu.add(Menu.LABEL, "Key Setup", 0).add(Menu.HL, "", 0)
         .add(Menu.CONTROLFIELD, "Left move", M_KEYS).add(Menu.CONTROLFIELD, "Right move", M_KEYS + 1)
         .add(Menu.CONTROLFIELD, "Jump", M_KEYS + 2).add(Menu.CONTROLFIELD, "Duck", M_KEYS + 3)
@@ -463,6 +469,11 @@ final class Game extends GameCanvas implements Runnable {
     }
     if (optionsMenu.listOf(M_FPSCAP) != fpsCap) {
       fpsCap = optionsMenu.listOf(M_FPSCAP);
+      saveSettings();
+    }
+    if (optionsMenu.find(M_SFXFMT) >= 0 && optionsMenu.listOf(M_SFXFMT) != sounds.format) {
+      sounds.setFormat(optionsMenu.listOf(M_SFXFMT));
+      sounds.play(Sound.DISTRO);
       saveSettings();
     }
     if (optionsMenu.listOf(M_DRAWCAP) != drawCap) {
@@ -1503,6 +1514,7 @@ final class Game extends GameCanvas implements Runnable {
     while (running) {
       long t0 = System.currentTimeMillis();
       long dt = t0 - last; last = t0;
+      if (dt > worstFrame) worstFrame = (int) dt;
       if (dt > 60) dt = 60;            // slow phone or a hiccup: don't jump too far
       if (dt < 1) dt = 1;
       try {
@@ -1519,7 +1531,9 @@ final class Game extends GameCanvas implements Runnable {
       }
       if (t0 - fpsT >= 1000) {
         int f10 = (int) (fpsCount * 10000L / Math.max(1, t0 - fpsT));
-        fpsText = (f10 / 10) + "." + (f10 % 10);
+        // with the slowest frame and the slowest sound start of that second: where the stalls are
+        fpsText = (f10 / 10) + "." + (f10 % 10) + " max" + worstFrame + " sfx" + sounds.stallMax;
+        worstFrame = 0; sounds.stallMax = 0;
         fpsCount = 0; fpsT = t0;
       }
       long spent = System.currentTimeMillis() - t0;
