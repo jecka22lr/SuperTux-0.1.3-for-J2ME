@@ -28,6 +28,20 @@ final class Res {
     return new DataInputStream(in);
   }
 
+  // Max Potato's sprite sheet: the same pictures with hard edges (s2.png, one see-through colour)
+  static boolean hardSprites;
+  static void setHardSprites(boolean on) {
+    if (on == hardSprites && sprImg != null) return;
+    Image old = sprImg;
+    sprImg = null;
+    System.gc();                       // one sheet in memory at a time
+    try { sprImg = Image.createImage(on ? "/s2.png" : "/s.png"); hardSprites = on; }
+    catch (Throwable e) {              // no s2.png in this jar: keep the normal sheet
+      try { sprImg = Image.createImage("/s.png"); } catch (Throwable e2) { sprImg = old; }
+      hardSprites = false;
+    }
+  }
+
   static void load() throws IOException {
     tileImg = Image.createImage("/t.png");
     sprImg = Image.createImage("/s.png");

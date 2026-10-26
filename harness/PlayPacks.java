@@ -21,7 +21,7 @@ public class PlayPacks {
     Res.load();
     for (int i = 0; i < Res.tFlags.length; i++) if ((Res.tFlags[i] & Res.DISTRO) != 0) { g.coinTile = i; break; }
     int run = 0, errors = 0, done = 0, total = 0;
-    long[][] work = new long[3][4];   // per detail: frames, regions, alpha px, fill px
+    long[][] work = new long[4][4];   // per detail: frames, regions, alpha px, fill px
     for (int p = 0; p < packs.length(); p++) {
       char letter = packs.charAt(p);
       int n = 0;
@@ -34,8 +34,8 @@ public class PlayPacks {
       }
       for (int i = 0; i < pick.length; i++, run++) {
         String id = "" + letter + pick[i];
-        int detail = run % 3; boolean land = (run / 3) % 2 == 1;
-        g.detail = detail; Menu.noEffects = detail == Game.POTATO;
+        int detail = run % 4; boolean land = (run / 4) % 2 == 1;
+        g.detail = detail; Menu.noEffects = detail >= Game.POTATO; Res.setHardSprites(detail == Game.MAXPOTATO);
         Menu.setCurrent(null, 0); g.worldmap = null;
         g.levelId = id; g.demo = false; g.lives = 4; g.score = 0; g.distros = 0; g.tux.dying = 0; g.level = null; g.testMode = false;
         g.setLayout(land);
@@ -102,7 +102,7 @@ public class PlayPacks {
       }
     }
     System.out.println("finished " + done + "/" + total + ", errors " + errors);
-    for (int d = 0; d < 3; d++) if (work[d][0] > 0)
+    for (int d = 0; d < 4; d++) if (work[d][0] > 0)
       System.out.println(Game.DETAIL_MODES[d] + ": per frame " + work[d][1] / work[d][0] + " drawRegion calls, "
           + work[d][2] / work[d][0] + " alpha-blended px, " + work[d][3] / work[d][0] + " filled px");
     System.exit(0);

@@ -31,6 +31,8 @@ More options for slow phones:
 |---|---|
 | Detail: Low | Plain sky colour instead of the background picture, no snow or clouds, level tiles drawn from a cached image (only coins and other animated tiles are drawn every frame), no HUD shadow, outlined touch buttons in landscape |
 | Detail: Potato | Also: tiles drawn from a cached image (only newly scrolled columns get drawn), no tile, enemy, fireball or star animations, defeated enemies vanish, no flying scores, coins or brick pieces, no fades, menu slides or HUD text shadows, solid menu boxes |
+| Detail: Max Potato | For the slowest phones: Potato plus hard-edged sprites (no half-see-through pixels), a still title screen, and bad guys far off screen wait until Tux comes near |
+| Draw cap | Max, 20, 15 or 10 drawn frames a second while the game keeps running at full speed: choppier, much less work |
 | Music: MIDI | No MP3 decoding |
 | Sound: Fast / MIDI / Nokia | Other ways of playing sound effects, for phones whose Java freezes when one starts |
 | FPS cap | Max, 25, 20 or 15. Fewer frames leaves the phone idle time, which can smooth out sound and music |

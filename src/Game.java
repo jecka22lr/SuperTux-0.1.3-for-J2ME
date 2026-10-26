@@ -38,7 +38,7 @@ final class Game extends GameCanvas implements Runnable {
   // time
   long now;                 // game time in ms
   int frameCounter;         // 0.1.3's global_frame_counter (25 ms ticks)
-  int fpsCount; long fpsT; String fpsText = "0.0";
+  int fpsCount; long fpsT, lastDraw; String fpsText = "0.0";
 
   // layout
   boolean landscape;        // chosen layout
@@ -111,7 +111,7 @@ final class Game extends GameCanvas implements Runnable {
   static final int M_START = 1, M_CONTRIB = 2, M_OPTIONS = 3, M_CONTROLS = 4, M_CREDITS = 5, M_QUIT = 6,
       M_SOUND = 10, M_MUSIC = 11, M_FPS = 12, M_LANDSCAPE = 13, M_TOUCH = 14, M_CONTINUE = 20, M_ABORT = 21,
       M_WM_RETURN = 30, M_WM_QUIT = 31, M_YES = 41, M_NO = 40, M_EDITOR = 7, M_KEYS = 50, M_HSNAME = 60,
-      M_STORY = 999, M_DETAIL = 15, M_FPSCAP = 16, M_RAM = 17, M_OPTHELP = 18;   // above any level number in a subset's level list
+      M_STORY = 999, M_DETAIL = 15, M_FPSCAP = 16, M_RAM = 17, M_OPTHELP = 18, M_DRAWCAP = 19;   // above any level number in a subset's level list
   Menu mainMenu, optionsMenu, loadGameMenu, contribMenu, gameMenu, worldmapMenu, confirmMenu, keysMenu,
       contribSubsetMenu, highscoreMenu;
   String[] contribSubsets; int contribSubset;
@@ -127,8 +127,14 @@ final class Game extends GameCanvas implements Runnable {
   // pieces or bouncing bricks, and no fades or menu slides: everything is there, with as little
   // drawing as possible, for slow phones
   static final String[] MUSIC_MODES = { "Normal", "MIDI", "Off" };
-  static final String[] DETAIL_MODES = { "Full", "Low", "Potato" };
-  static final int FULL = 0, LOW = 1, POTATO = 2;
+  static final String[] DETAIL_MODES = { "Full", "Low", "Potato", "Max Potato" };
+  static final int FULL = 0, LOW = 1, POTATO = 2, MAXPOTATO = 3;
+  // Max Potato, for the slowest phones: Potato plus sprites with hard edges (no half-see-through
+  // pixels to blend), a still title screen, and bad guys a screen or more away sleep until Tux comes
+  // near. Options > Draw cap: draw fewer frames than the game runs, so the game keeps its speed
+  static final String[] DRAWCAP_MODES = { "Max", "20", "15", "10" };
+  static final int[] DRAWCAP_MS = { 0, 50, 66, 100 };
+  int drawCap;
   int detail = FULL;
   int musicMode() { return !music.enabled ? 2 : music.midiOnly ? 1 : 0; }
   // Options > FPS cap: the shortest a frame may take. A lower cap leaves the phone idle time between
@@ -218,18 +224,19 @@ final class Game extends GameCanvas implements Runnable {
         landscape = b[0] != 0;
         music.enabled = b[1] != 0; music.midiOnly = b[1] == 2;
         if (b.length > 3) { sounds.mode = soundModeOf(b[2]); showFps = b[3] != 0; }
-        if (b.length > 4 && b[4] >= 2 && b[4] <= 6) {
+        if (b.length > 4 && b[4] >= 2 && b[4] <= 7) {
           java.io.DataInputStream in = new java.io.DataInputStream(new java.io.ByteArrayInputStream(b, 5, b.length - 5));
           for (int i = 0; i < 5; i++) keymapUp[i] = in.readInt();
           hsScore = in.readInt(); hsName = in.readUTF();
           if (b[4] >= 3) for (int i = 0; i < 5; i++) keymapSide[i] = in.readInt();
           if (b[4] >= 4) showTouch = in.readBoolean();
-          if (b[4] >= 5) detail = Math.max(FULL, Math.min(POTATO, in.readByte()));
+          if (b[4] >= 5) detail = Math.max(FULL, Math.min(MAXPOTATO, in.readByte()));
           if (b[4] >= 6) { fpsCap = Math.max(0, Math.min(FPSCAP_MS.length - 1, in.readByte())); ramSaver = in.readBoolean(); }
+          if (b[4] >= 7) drawCap = Math.max(0, Math.min(DRAWCAP_MS.length - 1, in.readByte()));
         }
       }
     } catch (Throwable e) { }
-    Menu.noEffects = detail == POTATO;
+    Menu.noEffects = detail >= POTATO;
     setLayout(landscape);
   }
 
@@ -246,13 +253,14 @@ final class Game extends GameCanvas implements Runnable {
       java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
       java.io.DataOutputStream out = new java.io.DataOutputStream(bo);
       out.writeByte(landscape ? 1 : 0); out.writeByte(!music.enabled ? 0 : music.midiOnly ? 2 : 1); out.writeByte(soundByte(sounds.mode));
-      out.writeByte(showFps ? 1 : 0); out.writeByte(6);
+      out.writeByte(showFps ? 1 : 0); out.writeByte(7);
       for (int i = 0; i < 5; i++) out.writeInt(keymapUp[i]);
       out.writeInt(hsScore); out.writeUTF(hsName);
       for (int i = 0; i < 5; i++) out.writeInt(keymapSide[i]);
       out.writeBoolean(showTouch);
       out.writeByte(detail);
       out.writeByte(fpsCap); out.writeBoolean(ramSaver);
+      out.writeByte(drawCap);
       out.close();
       byte[] b = bo.toByteArray();
       RecordStore rs = RecordStore.openRecordStore("stux", true);
@@ -293,6 +301,7 @@ final class Game extends GameCanvas implements Runnable {
         .add(Menu.STRINGSELECT, "Music     ", M_MUSIC)
         .add(Menu.STRINGSELECT, "Detail    ", M_DETAIL)
         .add(Menu.STRINGSELECT, "FPS cap   ", M_FPSCAP)
+        .add(Menu.STRINGSELECT, "Draw cap  ", M_DRAWCAP)
         .add(Menu.TOGGLE, "RAM saver ", M_RAM, null, ramSaver)
         .add(Menu.TOGGLE, "Show FPS  ", M_FPS, null, showFps)
         .add(Menu.TOGGLE, "Landscape ", M_LANDSCAPE, null, landscape)
@@ -304,6 +313,7 @@ final class Game extends GameCanvas implements Runnable {
     optionsMenu.setList(M_MUSIC, MUSIC_MODES, musicMode());
     optionsMenu.setList(M_DETAIL, DETAIL_MODES, detail);
     optionsMenu.setList(M_FPSCAP, FPSCAP_MODES, fpsCap);
+    optionsMenu.setList(M_DRAWCAP, DRAWCAP_MODES, drawCap);
     keysMenu.add(Menu.LABEL, "Key Setup", 0).add(Menu.HL, "", 0)
         .add(Menu.CONTROLFIELD, "Left move", M_KEYS).add(Menu.CONTROLFIELD, "Right move", M_KEYS + 1)
         .add(Menu.CONTROLFIELD, "Jump", M_KEYS + 2).add(Menu.CONTROLFIELD, "Duck", M_KEYS + 3)
@@ -412,12 +422,17 @@ final class Game extends GameCanvas implements Runnable {
     }
     if (optionsMenu.listOf(M_DETAIL) != detail) {
       detail = optionsMenu.listOf(M_DETAIL);
-      Menu.noEffects = detail == POTATO;
+      Menu.noEffects = detail >= POTATO;
+      Res.setHardSprites(detail == MAXPOTATO);
       loadBackground();
       saveSettings();
     }
     if (optionsMenu.listOf(M_FPSCAP) != fpsCap) {
       fpsCap = optionsMenu.listOf(M_FPSCAP);
+      saveSettings();
+    }
+    if (optionsMenu.listOf(M_DRAWCAP) != drawCap) {
+      drawCap = optionsMenu.listOf(M_DRAWCAP);
       saveSettings();
     }
     if (optionsMenu.check() < 0) return;
@@ -456,6 +471,7 @@ final class Game extends GameCanvas implements Runnable {
 
   // draw_demo: Tux walks right, jumping on a random timer, at half speed
   void demoFrame(long dt) {
+    if (detail == MAXPOTATO) return;   // Max Potato: a still title screen
     tux.inRight = true; tux.inLeft = false; tux.inDown = false; tux.inFire = false;
     if (now < randomEnd) tux.inUp = !walking;
     else { randomEnd = now + 3000 + Math.abs(rnd.nextInt()) % 3000; walking = !walking; }
@@ -736,10 +752,11 @@ final class Game extends GameCanvas implements Runnable {
     { "Detail",
       "Full|Everything, like SuperTux 0.1.3.",
       "Low|Plain sky instead of the background picture, no snow or clouds. Faster.",
-      "Potato|Also no animations or effects; defeated enemies vanish. Fastest." },
-    { "FPS cap",
-      "Max|Up to 33 frames a second.",
-      "25, 20, 15|Fewer frames give the phone spare time, which can smooth out sound and music." },
+      "Potato|Also no animations or effects; defeated enemies vanish. Much faster.",
+      "Max Potato|Also hard-edged sprites, a still title screen, and far-off enemies wait. Fastest." },
+    { "FPS cap and Draw cap",
+      "FPS cap|How often the game runs, up to 33 times a second. Lower gives the phone spare time, which can smooth out sound and music.",
+      "Draw cap|How often the screen is drawn. Lower is choppier but the game keeps its speed, and drawing is most of the work." },
     { "RAM saver",
       "On|Uses less memory and looks the same, but runs a bit slower. For phones that crash or lose sounds when memory runs out.",
       "Off|Keeps pictures ready in memory for speed." },
@@ -1347,9 +1364,9 @@ final class Game extends GameCanvas implements Runnable {
   static final int MENU_Y = 22, MENU_H = 14;
   boolean inMenuCorner(int x, int y) { return x >= sw - 48 && y >= MENU_Y - 4 && y < MENU_Y + MENU_H + 4; }
   void drawMenuCorner(Graphics g) {
-    if (detail == POTATO) { g.setColor(0xffffff); g.drawRect(sw - 48, MENU_Y, 47, MENU_H - 1); }
+    if (detail >= POTATO) { g.setColor(0xffffff); g.drawRect(sw - 48, MENU_Y, 47, MENU_H - 1); }
     else Res.fillAlpha(g, sw - 48, MENU_Y, 48, MENU_H, 0x508080b4);
-    Res.textCentered(g, Res.WHITE, "MENU", sw - 24, MENU_Y + 3, detail == POTATO ? 0 : 1);
+    Res.textCentered(g, Res.WHITE, "MENU", sw - 24, MENU_Y + 3, detail >= POTATO ? 0 : 1);
   }
 
   // one finger: turns taps into the same presses and held keys the keypad gives
@@ -1421,6 +1438,7 @@ final class Game extends GameCanvas implements Runnable {
   public void run() {
     Graphics screen = getGraphics();
     try { Res.load(); } catch (Throwable e) { state = ERROR; message = "Load error: " + e; }
+    if (detail == MAXPOTATO) Res.setHardSprites(true);
     sounds.init();
     coinTile = -1;
     if (state != ERROR) {
@@ -1439,9 +1457,13 @@ final class Game extends GameCanvas implements Runnable {
       } catch (Throwable e) {
         fail(e);
       }
-      try { paintAll(screen); } catch (Throwable e) { fail(e); }
-      flushGraphics();
-      fpsCount++;
+      // Options > Draw cap: the game runs every frame, the screen is drawn at most this often
+      if (DRAWCAP_MS[drawCap] == 0 || t0 - lastDraw >= DRAWCAP_MS[drawCap] - 5 || (state != PLAY && state != WORLDMAP)) {
+        try { paintAll(screen); } catch (Throwable e) { fail(e); }
+        flushGraphics();
+        lastDraw = t0;
+        fpsCount++;
+      }
       if (t0 - fpsT >= 1000) {
         int f10 = (int) (fpsCount * 10000L / Math.max(1, t0 - fpsT));
         fpsText = (f10 / 10) + "." + (f10 % 10);
@@ -1450,8 +1472,10 @@ final class Game extends GameCanvas implements Runnable {
       long spent = System.currentTimeMillis() - t0;
       int frameMs = FPSCAP_MS[fpsCap];
       // paused (or reading the help): nothing moves, so 10 frames a second are plenty
-      if (helpOpen || ((state == PLAY || state == WORLDMAP) && Menu.current != null)) frameMs = Math.max(frameMs, 100);
+      if (helpOpen || ((state == PLAY || state == WORLDMAP) && Menu.current != null)
+          || (state == TITLE && detail == MAXPOTATO)) frameMs = Math.max(frameMs, 100);   // still title too
       if (spent < frameMs) { try { Thread.sleep(frameMs - spent); } catch (InterruptedException e) { } }
+      else Thread.yield();             // a slow phone that never sleeps still lets key and touch events in
     }
   }
 
@@ -1659,7 +1683,7 @@ final class Game extends GameCanvas implements Runnable {
   // a short fade in from black when the screen changes (0.1.3's screens cut over with "Loading...")
   void fade(Graphics g) {
     long t = System.currentTimeMillis() - fadeStart;
-    if (detail != POTATO && t >= 0 && t < 300) Res.fillAlpha(g, 0, 0, sw, sh, (int) (255 * (300 - t) / 300) << 24);
+    if (detail < POTATO && t >= 0 && t < 300) Res.fillAlpha(g, 0, 0, sw, sh, (int) (255 * (300 - t) / 300) << 24);
   }
 
   // save_hs: "Congratulations", the score in the big yellow numbers, and the name
@@ -1723,15 +1747,15 @@ final class Game extends GameCanvas implements Runnable {
       drawLayer(g, level.bg, col0, col1, ox, top, false);
       drawLayer(g, level.ia, col0, col1, ox, top, true);
     }
-    if (detail != POTATO) for (int i = 0; i < NE; i++) if (bbOn[i])
+    if (detail < POTATO) for (int i = 0; i < NE; i++) if (bbOn[i])
       Res.drawTile(g, bbTile[i], ((int) bbX[i] - sx0) >> 1, ((int) (bbY[i] + bbOff[i]) + viewTop) >> 1, frameCounter);
     for (int i = 0; i < badguys.size(); i++) ((BadGuy) badguys.elementAt(i)).draw(g);
     tux.draw(g);
     for (int i = 0; i < bullets.size(); i++) ((Bullet) bullets.elementAt(i)).draw(g);
-    if (detail != POTATO) for (int i = 0; i < NE; i++) if (fsEnd[i] != 0)
+    if (detail < POTATO) for (int i = 0; i < NE; i++) if (fsEnd[i] != 0)
       Res.text(g, Res.GOLD, fsText[i], ((int) fsX[i] >> 1) + 8 - fsText[i].length() * 4, ((int) fsY[i] + viewTop) >> 1);
     for (int i = 0; i < items.size(); i++) ((Item) items.elementAt(i)).draw(g);
-    if (detail != POTATO) for (int i = 0; i < NE; i++) {
+    if (detail < POTATO) for (int i = 0; i < NE; i++) {
       if (bdOn[i] && coinTile >= 0)
         Res.drawTile(g, coinTile, ((int) bdX[i] - sx0) >> 1, ((int) bdY[i] + viewTop) >> 1, 0);
       if (pbEnd[i] != 0) {
@@ -1882,8 +1906,8 @@ final class Game extends GameCanvas implements Runnable {
       for (int x = col0; x <= col1; x++) {
         int t = map[row + x] & 0xff;
         if (t == 0) continue;
-        if (ia && detail != POTATO && bouncing(x, y)) continue;
-        Res.drawTile(g, t, ox + (x << 4), top + (y << 4), detail == POTATO ? 0 : frameCounter);
+        if (ia && detail < POTATO && bouncing(x, y)) continue;
+        Res.drawTile(g, t, ox + (x << 4), top + (y << 4), detail >= POTATO ? 0 : frameCounter);
       }
     }
   }

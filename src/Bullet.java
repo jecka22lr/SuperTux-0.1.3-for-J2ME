@@ -34,6 +34,6 @@ final class Bullet extends Body {
 
   void draw(Graphics g) {
     Res.drawSprite(g, Spr.BULLET, (int) (x - game.scrollX) >> 1, ((int) y + game.viewTop) >> 1,
-        game.detail == Game.POTATO ? 0 : game.now);
+        game.detail >= Game.POTATO ? 0 : game.now);
   }
 }

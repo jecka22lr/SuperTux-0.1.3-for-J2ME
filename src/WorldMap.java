@@ -227,22 +227,67 @@ final class WorldMap {
     if (camY < vh - height * 32) camY = vh - height * 32;
     if (width * 32 < vw) camX = (vw - width * 32) / 2;
     if (height * 32 < vh) camY = (vh - height * 32) / 2;
-    g.setColor(0); g.fillRect(0, 0, sw, sh);
     int x0 = Math.max(0, -camX / 32), y0 = Math.max(0, -camY / 32);
     int x1 = Math.min(width - 1, (vw - camX) / 32), y1 = Math.min(height - 1, (vh - camY) / 32);
-    for (int y = y0; y <= y1; y++)
-      for (int x = x0; x <= x1; x++)
-        Res.drawSpriteTL(g, tSprite[at(x, y)], (x * 32 + camX) / 2, (y * 32 + camY) / 2);
+    if (width * 32 < vw || height * 32 < vh) { g.setColor(0); g.fillRect(0, 0, sw, sh); }
+    if (game.detail != Game.FULL && !game.ramSaver) drawCached(g, sw, sh, x0, y0, x1, y1);
+    else {
+      if (width * 32 >= vw && height * 32 >= vh) { g.setColor(0); g.fillRect(0, 0, sw, sh); }
+      for (int y = y0; y <= y1; y++)
+        for (int x = x0; x <= x1; x++)
+          Res.drawSpriteTL(g, tSprite[at(x, y)], (x * 32 + camX) / 2, (y * 32 + camY) / 2);
+    }
     for (int i = 0; i < count; i++) {
       int s;
       if (lid[i].length() == 0) {
         if (destX[i] != -1 && (flags[i] & F_INVISIBLE) == 0) s = Spr.WM_TELEPORTER; else continue;
       } else s = solved[i] ? Spr.WM_DOT_GREEN : Spr.WM_DOT_RED;
-      Res.drawSpriteTL(g, s, (lx[i] * 32 + camX) / 2, (ly[i] * 32 + camY) / 2);
+      int dx = (lx[i] * 32 + camX) / 2, dy = (ly[i] * 32 + camY) / 2;
+      if (dx > -16 && dx < sw && dy > -16 && dy < sh) Res.drawSpriteTL(g, s, dx, dy);   // on screen only
     }
     int ts = game.bonus == GROWUP_BONUS ? Spr.WM_TUX : game.bonus == FLOWER_BONUS ? Spr.WM_FIRETUX : Spr.WM_SMALLTUX;
     Res.drawSpriteTL(g, ts, (px + camX) / 2, (py + camY - 10) / 2);
     status(g, sw, sh, landscape);
+  }
+
+  // Low and Potato: the map tiles kept in an offscreen ring of 16-pixel cells (cell x, y lives at
+  // (x % cN, y % cM)), so a frame is up to four blits plus the cells that scrolled into view,
+  // instead of a sprite per visible tile. The map never changes, so nothing else redraws it.
+  private javax.microedition.lcdui.Image cache; private Graphics cacheG;
+  private int cN, cM, cX0, cY0, cX1 = -1, cY1 = -1;
+
+  private void drawCached(Graphics g, int sw, int sh, int x0, int y0, int x1, int y1) {
+    int n = x1 - x0 + 1, m = y1 - y0 + 1;
+    if (cache == null || cN < n || cM < m) {
+      cache = null; cacheG = null;
+      cN = Math.max(n, sw / 16 + 2); cM = Math.max(m, sh / 16 + 2);
+      cache = javax.microedition.lcdui.Image.createImage(cN << 4, cM << 4);
+      cacheG = cache.getGraphics();
+      cX1 = -1;
+    }
+    for (int y = y0; y <= y1; y++)
+      for (int x = x0; x <= x1; x++) {
+        if (cX1 >= 0 && x >= cX0 && x <= cX1 && y >= cY0 && y <= cY1) continue;
+        int cx = (x % cN) << 4, cy = (y % cM) << 4;
+        cacheG.setClip(cx, cy, 16, 16);
+        cacheG.setColor(0); cacheG.fillRect(cx, cy, 16, 16);
+        Res.drawSpriteTL(cacheG, tSprite[at(x, y)], cx, cy);
+      }
+    cX0 = x0; cY0 = y0; cX1 = x1; cY1 = y1;
+    // where cell (x0, y0) lands on the screen, then the ring in up to two pieces each way
+    int sx = x0 * 16 + (camX >> 1), sy = y0 * 16 + (camY >> 1);
+    int sx0 = x0 % cN, sy0 = y0 % cM;
+    int w1 = Math.min(n, cN - sx0), h1 = Math.min(m, cM - sy0);
+    blit(g, sx0, sy0, w1, h1, sx, sy);
+    if (w1 < n) blit(g, 0, sy0, n - w1, h1, sx + (w1 << 4), sy);
+    if (h1 < m) {
+      blit(g, sx0, 0, w1, m - h1, sx, sy + (h1 << 4));
+      if (w1 < n) blit(g, 0, 0, n - w1, m - h1, sx + (w1 << 4), sy + (h1 << 4));
+    }
+  }
+
+  private void blit(Graphics g, int cx, int cy, int cw, int ch, int x, int y) {
+    g.drawRegion(cache, cx << 4, cy << 4, cw << 4, ch << 4, 0, x, y, Graphics.TOP | Graphics.LEFT);
   }
 
   // WorldMap::draw_status

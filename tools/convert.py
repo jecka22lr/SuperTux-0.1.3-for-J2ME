@@ -126,26 +126,37 @@ if ATNW:
 ids = sorted(tiles)
 cidx = {tid: i for i, tid in enumerate(ids)}      # compact index; tile 0 -> 0
 assert ids[0] == 0 and len(ids) < 256, len(ids)
-ta = Atlas(256)
-for tid in ids:
-    tiles[tid]['frames'] = []
-    for fn in tiles[tid]['images']:
-        p = os.path.join(IMG, 'tilesets', fn)
-        if fn == 'notile.png' or not os.path.exists(p): continue
-        tiles[tid]['frames'].append(ta.add(p))
-    ed = [fn for fn in tiles[tid]['editor'] if os.path.exists(os.path.join(IMG, 'tilesets', fn))]
-    tiles[tid]['edframe'] = ta.add(os.path.join(IMG, 'tilesets', ed[0])) if ed else -1
-save_png(ta.pack(), os.path.join(OUT, 'res', 't.png'))
-with open(os.path.join(OUT, 'res', 't.bin'), 'wb') as f:
-    f.write(struct.pack('>H', len(ta.rects)))
-    for r in ta.rects: f.write(struct.pack('>BBBB', r[0], r[1] & 0xff, r[2], r[3]) + struct.pack('>B', r[1] >> 8))
-    f.write(struct.pack('>H', len(ids)))
-    for tid in ids:
-        t = tiles[tid]
-        flags = (t['solid'] << 0) | (t['brick'] << 1) | (t['ice'] << 2) | (t['water'] << 3) \
-              | (t['fullbox'] << 4) | (t['distro'] << 5) | (t['goal'] << 6)
-        f.write(struct.pack('>BBHHB', flags, t['data'] & 0xff, t['anim'], cidx.get(t['next'], 0), len(t['frames'])))
-        for fr in t['frames']: f.write(struct.pack('>H', fr))
+def write_tiles(tids, suffix):
+    """the tile atlas and table for these tiles (their compact indices stay as in cidx)"""
+    ta = Atlas(256)
+    for tid in tids:
+        tiles[tid]['frames'] = []
+        for fn in tiles[tid]['images']:
+            p = os.path.join(IMG, 'tilesets', fn)
+            if fn == 'notile.png' or not os.path.exists(p): continue
+            tiles[tid]['frames'].append(ta.add(p))
+        ed = [fn for fn in tiles[tid]['editor'] if os.path.exists(os.path.join(IMG, 'tilesets', fn))]
+        tiles[tid]['edframe'] = ta.add(os.path.join(IMG, 'tilesets', ed[0])) if ed else -1
+    save_png(ta.pack(), os.path.join(OUT, 'res', 't%s.png' % suffix))
+    with open(os.path.join(OUT, 'res', 't%s.bin' % suffix), 'wb') as f:
+        f.write(struct.pack('>H', len(ta.rects)))
+        for r in ta.rects: f.write(struct.pack('>BBBB', r[0], r[1] & 0xff, r[2], r[3]) + struct.pack('>B', r[1] >> 8))
+        f.write(struct.pack('>H', len(tids)))
+        for tid in tids:
+            t = tiles[tid]
+            flags = (t['solid'] << 0) | (t['brick'] << 1) | (t['ice'] << 2) | (t['water'] << 3) \
+                  | (t['fullbox'] << 4) | (t['distro'] << 5) | (t['goal'] << 6)
+            f.write(struct.pack('>BBHHB', flags, t['data'] & 0xff, t['anim'], cidx.get(t['next'], 0), len(t['frames'])))
+            for fr in t['frames']: f.write(struct.pack('>H', fr))
+    return ta
+if ATNW:
+    # the jars without the mod (lite, release) get an atlas of the stock tiles only (the mod's tiles
+    # come after them in cidx, so every stock index is unchanged): less RAM and a smaller jar
+    stock_ids = [t for t in ids if t in stock_tiles]
+    assert [cidx[t] for t in stock_ids] == list(range(len(stock_ids)))
+    write_tiles(stock_ids, '-stock')
+    stock_ed = {t: tiles[t]['edframe'] for t in stock_ids}
+ta = write_tiles(ids, '')
 # level editor: the editor image of each tile, and the tile groups (sorted by name like 0.1.3's std::set)
 groups = []
 for e in ts[1:]:
@@ -155,13 +166,19 @@ for e in mod_groups:          # the mod's groups holding its new tiles (Forest, 
     new = [cidx[t] for t in (field(e, 'tiles') or []) if isinstance(t, int) and t in cidx and t not in stock_tiles]
     if new and one(e, 'name') not in [g[0] for g in groups]: groups.append((one(e, 'name'), new))
 groups.sort(key=lambda g: g[0])
-with open(os.path.join(OUT, 'res', 'te.bin'), 'wb') as f:
-    f.write(struct.pack('>H', len(ids)))
-    for tid in ids: f.write(struct.pack('>h', tiles[tid]['edframe']))
-    f.write(struct.pack('>B', len(groups)))
-    for name, ts_ in groups:
-        nb = name.encode('latin-1')
-        f.write(struct.pack('>B', len(nb)) + nb + struct.pack('>B', len(ts_)) + bytes(ts_))
+def write_editor(path, tids, edframes, grps):
+    with open(path, 'wb') as f:
+        f.write(struct.pack('>H', len(tids)))
+        for tid in tids: f.write(struct.pack('>h', edframes[tid]))
+        f.write(struct.pack('>B', len(grps)))
+        for name, ts_ in grps:
+            nb = name.encode('latin-1')
+            f.write(struct.pack('>B', len(nb)) + nb + struct.pack('>B', len(ts_)) + bytes(ts_))
+write_editor(os.path.join(OUT, 'res', 'te.bin'), ids, {t: tiles[t]['edframe'] for t in ids}, groups)
+if ATNW:
+    n_stock = len(stock_ids)
+    sg = [(nm, [i for i in g if i < n_stock]) for nm, g in groups]
+    write_editor(os.path.join(OUT, 'res', 'te-stock.bin'), stock_ids, stock_ed, [(nm, g) for nm, g in sg if g])
 print('tiles', len(ids), 'frames', len(ta.rects), 'atlas', ta.pack().size, 'groups', [g[0] for g in groups])
 
 # ---------- sprites ----------
@@ -205,7 +222,22 @@ wtile_sprite = {}
 for tid in sorted(wtiles):
     wtile_sprite[tid] = len(sprites)
     sprites.append(('wmt%d' % tid, 10.0, 0, 0, [sa.add(os.path.join(SYM, 'images', 'worldmap', one(wtiles[tid], 'image')))]))
-save_png(sa.pack(), os.path.join(OUT, 'res', 's.png'))
+sheet = sa.pack()
+save_png(sheet, os.path.join(OUT, 'res', 's.png'))
+# Max Potato: the same sheet with hard edges (each pixel fully shown or fully clear) as a paletted
+# PNG with one transparent colour, which old phones draw without blending
+def hard_edges(img):
+    img = img.convert('RGBA')
+    alpha = img.getchannel('A').point(lambda v: 255 if v >= 128 else 0)
+    q = img.convert('RGB').quantize(255)
+    pal = (q.getpalette() + [0] * 768)[:255 * 3]
+    q.putpalette(pal + [255, 0, 255])                     # index 255: the clear colour
+    qp, ap = q.load(), alpha.load()
+    for y in range(img.size[1]):
+        for x in range(img.size[0]):
+            if ap[x, y] == 0: qp[x, y] = 255
+    return q
+hard_edges(sheet).save(os.path.join(OUT, 'res', 's2.png'), optimize=True, transparency=255)
 # fonts: the 8x9 "small" letter sheets 0.1.3 uses at 320x240, stacked white/gold/blue/black
 def status_img(name):
     # the GP2X data lacks some small fonts; the Symbian 0.1.3 data (argv[3]) has them all

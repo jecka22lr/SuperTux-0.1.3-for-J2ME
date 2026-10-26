@@ -134,6 +134,12 @@ final class Menu {
       return true;
     }
     if (code == '*' && k == TEXTFIELD) { caps = !caps; mtKey = -1; return true; }
+    // QWERTY phones (E71, C6...) send the letter itself: type it straight in
+    if (k == TEXTFIELD && code >= 32 && code < 127 && code != '#') {
+      if (input[active].length() < 40) input[active] += (char) code;
+      mtKey = -1;
+      return true;
+    }
     mtKey = -1;
     return false;
   }

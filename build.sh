@@ -20,6 +20,7 @@ MicroEdition-Profile: MIDP-2.0
 MicroEdition-Configuration: CLDC-1.1
 M
 cp -r res build/res
+rm -f build/res/t-stock.png build/res/t-stock.bin build/res/te-stock.bin   # only for the jars without the mod
 $J/bin/jar cfm build/raw.jar build/MANIFEST.MF -C build/cls . -C build/res . 2>&1 | grep -v JAVA_TOOL_OPTIONS || true
 cat > build/pg.pro <<P
 -injars $PWD/build/raw.jar
@@ -37,10 +38,15 @@ P
 $J/bin/java -jar $PG @build/pg.pro 2>&1 | grep -v JAVA_TOOL_OPTIONS | grep -i "error\|warn" || true
 SIZE=$(stat -c %s dist/SuperTux.jar)
 { cat build/MANIFEST.MF; echo "MIDlet-Jar-URL: SuperTux.jar"; echo "MIDlet-Jar-Size: $SIZE"; } > dist/SuperTux.jad
+# the stock-only tile atlas (smaller, less RAM) for the jars without the mod, run inside their folder
+stock_tiles() {
+  [ -f ../../res/t-stock.png ] || return 0
+  cp ../../res/t-stock.png t.png && cp ../../res/t-stock.bin t.bin && cp ../../res/te-stock.bin te.bin
+}
 # lite build for old phones (1 MB JAR limit): MIDI music only
 mkdir -p build/lite && cd build/lite && unzip -q -o ../../dist/SuperTux.jar && rm -f m/*.mp3 && \
   { [ ! -f ../../res-atnw-only.txt ] || xargs rm -f < ../../res-atnw-only.txt; } && \
-  mv x/g-lite.txt x/g.txt && rm -f x/g-atnw.txt && \
+  mv x/g-lite.txt x/g.txt && rm -f x/g-atnw.txt && stock_tiles && \
   $J/bin/jar cfm ../../dist/SuperTux-lite.jar META-INF/MANIFEST.MF $(ls | grep -v META-INF) 2>&1 | grep -v JAVA_TOOL_OPTIONS || true
 cd ../..
 SIZE=$(stat -c %s dist/SuperTux-lite.jar)
@@ -49,7 +55,7 @@ SIZE=$(stat -c %s dist/SuperTux-lite.jar)
 # music and many of its backgrounds come from other games
 if [ -f res-atnw-only.txt ]; then
   mkdir -p build/gpl && cd build/gpl && unzip -q -o ../../dist/SuperTux.jar && \
-    xargs rm -f < ../../res-atnw-only.txt && mv x/g-lite.txt x/g.txt && rm -f x/g-atnw.txt && \
+    xargs rm -f < ../../res-atnw-only.txt && mv x/g-lite.txt x/g.txt && rm -f x/g-atnw.txt && stock_tiles && \
     $J/bin/jar cfm ../../dist/SuperTux-noattnw.jar META-INF/MANIFEST.MF $(ls | grep -v META-INF) 2>&1 | grep -v JAVA_TOOL_OPTIONS || true
   cd ../..
   SIZE=$(stat -c %s dist/SuperTux-noattnw.jar)
