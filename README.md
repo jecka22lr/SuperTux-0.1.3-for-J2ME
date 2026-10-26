@@ -2,7 +2,8 @@
 A rewrite of SuperTux 0.1.3 for J2ME devices. 240p, landscape or portrait. Not my own game - only rewrote it with the assistance of AI.
 
 # Benchmarks?
-None known yet. Runs pretty solidly on emulators.
+Sony Ericsson Cedar - Full speed, no known issues. Virtually perfect.
+Nokia E71 - Runs at full speed unless Sound is on due to some issues with 369MHz Symbian 9.2 phones. Triggering sound effects results in lag spikes.
 
 # What changed between the original port and this?
 Brutal rewrite of all of the code. Like, pretty much every line of code was adapted to Java... but the entire game is made to be as much of a 1:1 recreation as possible.
@@ -15,4 +16,4 @@ This has not yet been tested on real firmware and as such I have no real expecta
 
 # Issues
 Lite version of this game has very shitty MIDIs for the soundtrack. I might automate something to make them chiptune versions of the soundtrack. If you wanna make some human-made stuff I would much prefer that!
-On Symbian S60 platform phones with 369MHz CPUs, there are annoying lag spikes for every time a sound effect is played. This is not yet mitigated by different sound effect options except for OFF. This is a known issue unfortunately.
+On Symbian S60 platform phones with 369MHz CPUs, there are annoying lag spikes for every time a sound effect is played. This is not yet mitigated by different sound effect options except for OFF. This is a known issue unfortunately and allegedly some commercial J2ME games shipped without SFX for these.
