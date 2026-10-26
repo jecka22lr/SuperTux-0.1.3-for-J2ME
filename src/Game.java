@@ -410,6 +410,7 @@ final class Game extends GameCanvas implements Runnable {
     if (optionsMenu.listOf(M_DETAIL) != detail) {
       detail = optionsMenu.listOf(M_DETAIL);
       Menu.noEffects = detail == POTATO;
+      loadBackground();
       saveSettings();
     }
     if (optionsMenu.listOf(M_FPSCAP) != fpsCap) {
@@ -418,7 +419,7 @@ final class Game extends GameCanvas implements Runnable {
     }
     if (optionsMenu.check() < 0) return;
 
-    ramSaver = optionsMenu.isToggled(M_RAM);
+    if (ramSaver != optionsMenu.isToggled(M_RAM)) { ramSaver = !ramSaver; loadBackground(); }
 
     showFps = optionsMenu.isToggled(M_FPS);
     if (showTouch != optionsMenu.isToggled(M_TOUCH)) { showTouch = !showTouch; setLayout(landscape); }
@@ -723,20 +724,7 @@ final class Game extends GameCanvas implements Runnable {
     } catch (Exception e) {
       state = ERROR; message = "Level " + levelId + ": " + e; return;
     }
-    boolean keepBg = detail == FULL && !ramSaver;   // Low, Potato and RAM saver only need its colour
-    if (level.background != 255 && (level.background != bgImageNo || (keepBg && bgImage == null))) {
-      bgImage = null; bgTall = null;
-      try {
-        bgImage = Image.createImage("/b/" + level.background + ".png");
-        int[] px = new int[1];
-        bgImage.getRGB(px, 0, 1, 0, 0, 1, 1);
-        skyColor = px[0] & 0xffffff;
-      } catch (Exception e) { bgImage = null; skyColor = level.topColor; }
-      bgImageNo = level.background;
-      bgTall = keepBg && bgImage != null ? tall(bgImage, 80) : null;
-    }
-    if (!keepBg) { bgImage = null; bgTall = null; }
-    if (level.background == 255) { bgImage = null; bgImageNo = -1; skyColor = level.topColor; }
+    loadBackground();
     tux.init(level);
     if (!demo) applyBonus();
     if (oldX >= 0) {
@@ -762,6 +750,27 @@ final class Game extends GameCanvas implements Runnable {
       state = INTRO; stateMin = now + 1000; stateT = now + 3000; music.stop(); music.type = Music.NONE;
       clearEvents();
     } else startPlay();
+  }
+
+  // the level's background picture: kept for Full (without RAM saver), otherwise only its top colour.
+  // Also called when Detail or RAM saver change, so switching back to Full brings the picture back
+  // straight away instead of at the next level
+  void loadBackground() {
+    if (level == null) return;
+    boolean keepBg = detail == FULL && !ramSaver;
+    if (level.background != 255 && (level.background != bgImageNo || (keepBg && bgImage == null))) {
+      bgImage = null; bgTall = null;
+      try {
+        bgImage = Image.createImage("/b/" + level.background + ".png");
+        int[] px = new int[1];
+        bgImage.getRGB(px, 0, 1, 0, 0, 1, 1);
+        skyColor = px[0] & 0xffffff;
+      } catch (Exception e) { bgImage = null; skyColor = level.topColor; }
+      bgImageNo = level.background;
+      bgTall = keepBg && bgImage != null ? tall(bgImage, 80) : null;
+    }
+    if (!keepBg) { bgImage = null; bgTall = null; }
+    if (level.background == 255) { bgImage = null; bgImageNo = -1; skyColor = level.topColor; }
   }
 
   // World::apply_bonuses
