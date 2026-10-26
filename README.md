@@ -34,7 +34,7 @@ More options for slow phones:
 | Music: MIDI | No MP3 decoding |
 | Sound: Fast / MIDI / Nokia | Other ways of playing sound effects, for phones whose Java freezes when one starts |
 | FPS cap | Max, 25, 20 or 15. Fewer frames leaves the phone idle time, which can smooth out sound and music |
-| RAM saver | No level background pictures, and pictures a level doesn't need are freed before it loads |
+| RAM saver | Memory instead of speed, with the same look: no tile cache or cached touch buttons, no stretched copy of the background picture (sky colour above it instead), and the logo, story and score pictures are freed before each level loads |
 
 The MIDI versions of the tracker songs (lite jar, Music: MIDI, phones without MP3) now have a softer chiptune sound.
 

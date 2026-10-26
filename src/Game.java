@@ -136,8 +136,10 @@ final class Game extends GameCanvas implements Runnable {
   static final String[] FPSCAP_MODES = { "Max", "25", "20", "15" };
   static final int[] FPSCAP_MS = { 30, 40, 50, 66 };
   int fpsCap;
-  // Options > RAM saver: no level background pictures (sky colour instead, like Low), and the logo,
-  // story pictures and tile caches are let go before each level loads
+  // Options > RAM saver trades speed for memory and leaves the look alone; Detail trades looks for
+  // speed. RAM saver: no tile cache (Low/Potato draw tiles one by one again), no cached touch
+  // buttons, no stretched copy of the background picture (Full keeps the picture, sky colour above
+  // it), and the logo, story and score pictures are let go before each level loads
   boolean ramSaver;
   Menu adventureMenu;
 
@@ -419,7 +421,11 @@ final class Game extends GameCanvas implements Runnable {
     }
     if (optionsMenu.check() < 0) return;
 
-    if (ramSaver != optionsMenu.isToggled(M_RAM)) { ramSaver = !ramSaver; loadBackground(); }
+    if (ramSaver != optionsMenu.isToggled(M_RAM)) {
+      ramSaver = !ramSaver;
+      if (ramSaver) { tc = null; tcG = null; tcLevel = null; touchImg = null; }
+      loadBackground();
+    }
 
     showFps = optionsMenu.isToggled(M_FPS);
     if (showTouch != optionsMenu.isToggled(M_TOUCH)) { showTouch = !showTouch; setLayout(landscape); }
@@ -713,8 +719,8 @@ final class Game extends GameCanvas implements Runnable {
   void loadLevel(boolean intro) {
     float oldX = level != null && tux.dying != Player.DYING_NOT ? tux.x : -1;
     if (ramSaver) {                    // let go of everything the level doesn't need before loading it
-      level = null; tcLevel = null; tc = null; tcG = null;
-      bgImage = null; bgTall = null;     // the sky colour (skyColor, bgImageNo) stays
+      level = null; tcLevel = null; tc = null; tcG = null; touchImg = null;
+      bgImage = null; bgTall = null;     // loadBackground loads it again (the sky colour stays)
       if (!demo) logoImg = null;
       numbersImg = null; textImg = null; textTall = null; textImgNo = -1;
       System.gc();
@@ -757,8 +763,10 @@ final class Game extends GameCanvas implements Runnable {
   // straight away instead of at the next level
   void loadBackground() {
     if (level == null) return;
-    boolean keepBg = detail == FULL && !ramSaver;
-    if (level.background != 255 && (level.background != bgImageNo || (keepBg && bgImage == null))) {
+    boolean keepBg = detail == FULL;          // Low and Potato only need its colour
+    boolean wantTall = keepBg && !ramSaver;   // the portrait copy with a taller sky: RAM saver skips it
+    if (level.background != 255 && (level.background != bgImageNo || (keepBg && bgImage == null)
+        || (wantTall && bgTall == null))) {
       bgImage = null; bgTall = null;
       try {
         bgImage = Image.createImage("/b/" + level.background + ".png");
@@ -767,9 +775,10 @@ final class Game extends GameCanvas implements Runnable {
         skyColor = px[0] & 0xffffff;
       } catch (Exception e) { bgImage = null; skyColor = level.topColor; }
       bgImageNo = level.background;
-      bgTall = keepBg && bgImage != null ? tall(bgImage, 80) : null;
+      bgTall = wantTall && bgImage != null ? tall(bgImage, 80) : null;
     }
     if (!keepBg) { bgImage = null; bgTall = null; }
+    if (!wantTall) bgTall = null;
     if (level.background == 255) { bgImage = null; bgImageNo = -1; skyColor = level.topColor; }
   }
 
@@ -1215,16 +1224,16 @@ final class Game extends GameCanvas implements Runnable {
     return -1;
   }
 
-  // Portrait below Full: the buttons sit under the level on a plain sky fill, so they are drawn once
-  // into an image and only redrawn when a different button is held or the sky colour changes.
-  // Landscape (over the level) in Potato: outlines and labels only, no see-through fills.
+  // Portrait below Full (without RAM saver): the buttons sit under the level on a plain sky fill, so
+  // they are drawn once into an image and only redrawn when a different button is held or the sky
+  // colour changes. Otherwise drawn each frame; in Potato as outlines and labels only.
   Image touchImg; int touchImgKey = -1;
 
   void drawTouch(Graphics g) {
     int pressed = 0;
     for (int i = 0; i < 8; i++)
       if ((touchKeys & T_BITS[i]) == T_BITS[i] && touchKeys != 0 && touchButton(lastTouchX, lastTouchY) == i) pressed |= 1 << i;
-    if (!landscape && detail != FULL) {
+    if (!landscape && detail != FULL && !ramSaver) {
       int h = touchRect(6)[3], y0 = sh - h, sky = skyFill();
       int key = pressed ^ (sky << 8);
       if (touchImg == null || touchImg.getWidth() != sw || touchImg.getHeight() != h) { touchImg = Image.createImage(sw, h); touchImgKey = -1; }
@@ -1238,7 +1247,7 @@ final class Game extends GameCanvas implements Runnable {
       g.drawImage(touchImg, 0, y0, Graphics.TOP | Graphics.LEFT);
       return;
     }
-    drawButtons(g, pressed, landscape && detail == POTATO);
+    drawButtons(g, pressed, detail == POTATO);   // Potato: outlines and labels only
   }
 
   void drawButtons(Graphics g, int pressed, boolean plain) {
@@ -1607,7 +1616,7 @@ final class Game extends GameCanvas implements Runnable {
     int top = viewTop >> 1;
     int col0 = (sx0 >> 5) - 4, col1 = (sx0 + viewW) >> 5;
     int ox = -(sx0 >> 1);
-    if (detail != FULL) {
+    if (detail != FULL && !ramSaver) {
       // Low and Potato: the tiles come from the cache, which covers the level's rows, so only the
       // sky above and below it needs filling; Low draws its animated tiles (coins, water) on top
       int sky = skyFill();
@@ -1739,6 +1748,12 @@ final class Game extends GameCanvas implements Runnable {
       Image im = top > 0 && bgTall != null ? bgTall : bgImage;
       int y0 = im == bgTall ? 0 : top;
       int iw = im.getWidth();
+      if (im == bgImage && top > 0) {          // RAM saver in portrait: sky colour around the picture
+        g.setColor(skyColor);
+        g.fillRect(0, 0, sw, top);
+        int bot = top + im.getHeight();
+        if (bot < sh) g.fillRect(0, bot, sw, sh - bot);
+      }
       int s = ((int) (sx * level.bkgdSpeed / 100f) >> 1) % iw;
       for (int x = -s; x < sw; x += iw) g.drawImage(im, x, y0, Graphics.TOP | Graphics.LEFT);
     } else {
