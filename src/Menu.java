@@ -217,7 +217,48 @@ final class Menu {
   }
 
   // Menu::draw; cx is the screen centre, sh the screen height
+  // Potato and Max Potato: the solid menu box with everything on it is drawn into an image and
+  // only drawn again when something on it changes (cursor, values, text, the typing caret)
+  private javax.microedition.lcdui.Image cache; private int cacheKey;
+
   void draw(Graphics g, int cx, int sh, boolean portrait, long now) {
+    if (!noEffects) { drawDirect(g, cx, sh, portrait, now); return; }
+    int key = stateKey(cx, sh, portrait);
+    int bx = boxX, by = boxY;
+    if (cache == null || key != cacheKey || boxW <= 0) {
+      drawDirect(g, cx, sh, portrait, now);              // works out the box (boxX..boxH) too
+      if (boxW > 0 && boxH > 0) {
+        if (cache == null || cache.getWidth() != boxW || cache.getHeight() != boxH)
+          cache = javax.microedition.lcdui.Image.createImage(boxW, boxH);
+        Graphics cg = cache.getGraphics();
+        cg.translate(-boxX, -boxY);
+        drawDirect(cg, cx, sh, portrait, now);
+        cacheKey = key;
+      }
+      return;
+    }
+    g.drawImage(cache, bx, by, Graphics.TOP | Graphics.LEFT);
+    if (count > 0 && kind[active] == TEXTFIELD)
+      Res.chars(g, Res.WHITE, caps ? "ABC   * switches case" : "abc   * switches case", 5, sh - 15);
+  }
+
+  // everything the menu shows, folded into one number
+  private int stateKey(int cx, int sh, boolean portrait) {
+    int k = count * 31 + active;
+    k = k * 31 + cx; k = k * 31 + sh; k = k * 31 + (portrait ? 1 : 0); k = k * 31 + (waiting ? 1 : 0) + (caps ? 2 : 0);
+    k = k * 31 + posYPortrait * 7 + posY;
+    for (int i = 0; i < count; i++) {
+      k = k * 31 + kind[i];
+      k = k * 31 + (text[i] != null ? text[i].hashCode() : 0);
+      k = k * 31 + (toggled[i] ? 1 : 0) + listActive[i] * 2;
+      if (kind[i] == TEXTFIELD || kind[i] == NUMFIELD) k = k * 31 + input[i].hashCode();
+      if (kind[i] == CONTROLFIELD) k = k * 31 + toggledCode[i];
+    }
+    if (count > 0 && kind[active] == TEXTFIELD) k = k * 31 + (int) ((System.currentTimeMillis() / 500) % 2);   // caret
+    return k;
+  }
+
+  void drawDirect(Graphics g, int cx, int sh, boolean portrait, long now) {
     screenW = cx * 2;
     if (posX >= 0) cx = posX;
     int py = portrait ? posYPortrait : posY;

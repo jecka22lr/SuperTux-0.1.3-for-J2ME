@@ -230,7 +230,7 @@ final class WorldMap {
     int x0 = Math.max(0, -camX / 32), y0 = Math.max(0, -camY / 32);
     int x1 = Math.min(width - 1, (vw - camX) / 32), y1 = Math.min(height - 1, (vh - camY) / 32);
     if (width * 32 < vw || height * 32 < vh) { g.setColor(0); g.fillRect(0, 0, sw, sh); }
-    if (game.detail != Game.FULL && !game.ramSaver) drawCached(g, sw, sh, x0, y0, x1, y1);
+    if (!game.ramSaver) drawCached(g, sw, sh, x0, y0, x1, y1);   // every detail level: looks the same
     else {
       if (width * 32 >= vw && height * 32 >= vh) { g.setColor(0); g.fillRect(0, 0, sw, sh); }
       for (int y = y0; y <= y1; y++)
@@ -250,7 +250,7 @@ final class WorldMap {
     status(g, sw, sh, landscape);
   }
 
-  // Low and Potato: the map tiles kept in an offscreen ring of 16-pixel cells (cell x, y lives at
+  // The map tiles (not with RAM saver) kept in an offscreen ring of 16-pixel cells (cell x, y lives at
   // (x % cN, y % cM)), so a frame is up to four blits plus the cells that scrolled into view,
   // instead of a sprite per visible tile. The map never changes, so nothing else redraws it.
   private javax.microedition.lcdui.Image cache; private Graphics cacheG;

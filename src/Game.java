@@ -25,7 +25,7 @@ final class Game extends GameCanvas implements Runnable {
 
   // states
   static final int PLAY = 0, INTRO = 1, GAMEOVER = 2, ERROR = 4, TITLE = 5, WORLDMAP = 6, TEXT = 7,
-      CONTROLS = 8, LOADING = 9, EDITOR = 10, HIGHSCORE = 11, NOTICE = 12;
+      CONTROLS = 8, LOADING = 9, EDITOR = 10, HIGHSCORE = 11, NOTICE = 12, ABOUT = 13;
 
   final SuperTux midlet;
   volatile boolean running = true;
@@ -111,7 +111,7 @@ final class Game extends GameCanvas implements Runnable {
   static final int M_START = 1, M_CONTRIB = 2, M_OPTIONS = 3, M_CONTROLS = 4, M_CREDITS = 5, M_QUIT = 6,
       M_SOUND = 10, M_MUSIC = 11, M_FPS = 12, M_LANDSCAPE = 13, M_TOUCH = 14, M_CONTINUE = 20, M_ABORT = 21,
       M_WM_RETURN = 30, M_WM_QUIT = 31, M_YES = 41, M_NO = 40, M_EDITOR = 7, M_KEYS = 50, M_HSNAME = 60,
-      M_STORY = 999, M_DETAIL = 15, M_FPSCAP = 16, M_RAM = 17, M_OPTHELP = 18, M_DRAWCAP = 19;   // above any level number in a subset's level list
+      M_STORY = 999, M_DETAIL = 15, M_FPSCAP = 16, M_RAM = 17, M_OPTHELP = 18, M_DRAWCAP = 19, M_ABOUT = 8;   // above any level number in a subset's level list
   Menu mainMenu, optionsMenu, loadGameMenu, contribMenu, gameMenu, worldmapMenu, confirmMenu, keysMenu,
       contribSubsetMenu, highscoreMenu;
   String[] contribSubsets; int contribSubset;
@@ -289,13 +289,7 @@ final class Game extends GameCanvas implements Runnable {
     adventureMenu.add(Menu.LABEL, "Start Game", 0).add(Menu.HL, "", 0);
     for (int i = 0; i < startTitle.length; i++) adventureMenu.add(Menu.GOTO, startTitle[i], 300 + i, loadGameMenu, false);
     adventureMenu.add(Menu.HL, "", 0).add(Menu.BACK, "Back", 0);
-    mainMenu.add(Menu.GOTO, "Start Game", M_START, startTitle.length > 1 ? adventureMenu : loadGameMenu, false)
-        .add(Menu.GOTO, "Bonus Levels", M_CONTRIB, contribMenu, false)
-        .add(Menu.GOTO, "Options", M_OPTIONS, optionsMenu, false)
-        .add(Menu.ACTION, "Controls", M_CONTROLS)
-        .add(Menu.ACTION, "Level Editor", M_EDITOR)
-        .add(Menu.ACTION, "Credits", M_CREDITS)
-        .add(Menu.ACTION, "Quit", M_QUIT);
+    buildMainMenu();
     optionsMenu.add(Menu.LABEL, "Options", 0).add(Menu.HL, "", 0)
         .add(Menu.STRINGSELECT, "Sound     ", M_SOUND)
         .add(Menu.STRINGSELECT, "Music     ", M_MUSIC)
@@ -334,6 +328,45 @@ final class Game extends GameCanvas implements Runnable {
     worldmapMenu.add(Menu.LABEL, "Pause", 0).add(Menu.HL, "", 0)
         .add(Menu.ACTION, "Continue", M_WM_RETURN).add(Menu.GOTO, "Options", 0, optionsMenu, false)
         .add(Menu.HL, "", 0).add(Menu.ACTION, "Quit Game", M_WM_QUIT);
+  }
+
+  // Potato and Max Potato leave the credit lines off the title screen and show them on an About
+  // screen instead (the title then has no text to draw over the moving demo)
+  void buildMainMenu() {
+    int act = mainMenu.active;
+    mainMenu.clear();
+    mainMenu.add(Menu.GOTO, "Start Game", M_START, startTitle.length > 1 ? adventureMenu : loadGameMenu, false)
+        .add(Menu.GOTO, "Bonus Levels", M_CONTRIB, contribMenu, false)
+        .add(Menu.GOTO, "Options", M_OPTIONS, optionsMenu, false)
+        .add(Menu.ACTION, "Controls", M_CONTROLS)
+        .add(Menu.ACTION, "Level Editor", M_EDITOR);
+    if (detail >= POTATO) mainMenu.add(Menu.ACTION, "About", M_ABOUT);
+    mainMenu.add(Menu.ACTION, "Credits", M_CREDITS)
+        .add(Menu.ACTION, "Quit", M_QUIT);
+    mainMenu.active = Math.min(act, mainMenu.count - 1);
+  }
+
+  String[] creditLines() {
+    String[] c = landscape
+        ? new String[] { " SuperTux 0.1.3 - " + RELEASE, "Made by SuperTux Devel Team",
+            "Originally ported by Lars 'Anotherguest'", "2026 J2ME port", "by Jecka22LR" }
+        : new String[] { " SuperTux 0.1.3 - J2ME", RELEASE, "Made by SuperTux Devel Team",
+            "Originally ported by", "Lars 'Anotherguest'", "2026 J2ME port by Jecka22LR" };
+    if (titleNote == null) return c;
+    String[] c2 = new String[c.length + 1];          // an edition's own line on top (x/g.txt T|...)
+    c2[0] = " " + titleNote;
+    System.arraycopy(c, 0, c2, 1, c.length);
+    return c2;
+  }
+
+  void drawAbout(Graphics g) {
+    g.setColor(0); g.fillRect(0, 0, sw, sh);
+    int top = landscape ? 20 : 50;
+    Res.textCentered(g, Res.BLUE, "- About -", sw / 2, top, 0);
+    String[] c = creditLines();
+    for (int i = 0; i < c.length; i++) Res.textCentered(g, Res.WHITE, c[i].trim(), sw / 2, top + 25 + i * 12, 0);
+    centeredWrapped(g, Res.WHITE, "Free software under the GNU GPL version 2. See COPYING.", sw / 2, top + 40 + c.length * 12, 10);
+    Res.text(g, Res.GOLD, showTouch ? "Tap or press any key" : "Press any key", 0, sh - 12, 0);
   }
 
   // generate_contrib_menu: the community packs, the level editor's subsets, then the bonus islands
@@ -424,6 +457,7 @@ final class Game extends GameCanvas implements Runnable {
       detail = optionsMenu.listOf(M_DETAIL);
       Menu.noEffects = detail >= POTATO;
       Res.setHardSprites(detail == MAXPOTATO);
+      buildMainMenu();
       loadBackground();
       saveSettings();
     }
@@ -509,6 +543,7 @@ final class Game extends GameCanvas implements Runnable {
       switch (mainMenu.check()) {
         case M_START: curStart = 0; updateSlots(); break;
         case M_CONTROLS: state = CONTROLS; break;
+        case M_ABOUT: state = ABOUT; break;
         case M_CONTRIB: generateContrib(); break;
         case M_EDITOR: openEditor(); break;
         case M_CREDITS:
@@ -757,7 +792,7 @@ final class Game extends GameCanvas implements Runnable {
       "Full|Everything, like SuperTux 0.1.3.",
       "Low|Plain sky instead of the background picture, no snow or clouds. Faster.",
       "Potato|Also no animations or effects; defeated enemies vanish. Much faster.",
-      "Max Potato|Also hard-edged sprites, a still title screen, and far-off enemies wait. Fastest." },
+      "Max Potato|Also hard-edged sprites, a still title screen, and far-off enemies wait. Fastest. Music: MIDI helps too." },
     { "FPS cap and Draw cap",
       "FPS cap|How often the game runs, up to 33 times a second. Lower gives the phone spare time, which can smooth out sound and music.",
       "Draw cap|How often the screen is drawn. Lower is choppier but the game keeps its speed, and drawing is most of the work." },
@@ -1486,7 +1521,7 @@ final class Game extends GameCanvas implements Runnable {
       Menu mc = Menu.current;
       boolean sliding = mc != null && !Menu.noEffects && mc.effectEnd > System.currentTimeMillis() - 100;
       if (!sliding && (helpOpen || ((state == PLAY || state == WORLDMAP) && mc != null)
-          || (state == TITLE && detail == MAXPOTATO))) frameMs = Math.max(frameMs, 100);   // still title too
+          || (state == TITLE && detail == MAXPOTATO) || state == CONTROLS || state == ABOUT)) frameMs = Math.max(frameMs, 100);   // still screens too
       if (spent < frameMs) { try { Thread.sleep(frameMs - spent); } catch (InterruptedException e) { } }
       else Thread.yield();             // a slow phone that never sleeps still lets key and touch events in
     }
@@ -1594,7 +1629,7 @@ final class Game extends GameCanvas implements Runnable {
       if (music.type != Music.LEVEL) music.play(Music.LEVEL);
     } else if (state == TEXT) {
       textFrame(dt, ev);
-    } else if (state == CONTROLS) {
+    } else if (state == CONTROLS || state == ABOUT) {
       if (ev != 0) { state = TITLE; Menu.setCurrent(mainMenu, now); }
     } else if (state == LOADING) {
       if (stateT++ > 0) openWorldMap();     // one "Loading..." frame first
@@ -1649,6 +1684,7 @@ final class Game extends GameCanvas implements Runnable {
     if (state == HIGHSCORE) { drawHighscore(g); return; }
     if (state == TEXT) { drawText(g); return; }
     if (state == CONTROLS) { drawControls(g); return; }
+    if (state == ABOUT) { drawAbout(g); return; }
     if (state == WORLDMAP) {
       worldmap.draw(g, sw, sh, landscape);
       if (showTouch && Menu.current == null) {
@@ -1673,19 +1709,11 @@ final class Game extends GameCanvas implements Runnable {
           Res.textCentered(g, Res.WHITE, "The title stands still", sw / 2, ly + 32, 0);
           Res.textCentered(g, Res.WHITE, "on purpose", sw / 2, ly + 42, 0);
         } else g.drawImage(logo(), landscape ? 80 : 40, landscape ? 8 : 24, Graphics.TOP | Graphics.LEFT);
-        String[] c = landscape
-            ? new String[] { " SuperTux 0.1.3 - " + RELEASE, "Made by SuperTux Devel Team",
-                "Originally ported by Lars 'Anotherguest'", "2026 J2ME port", "by Jecka22LR" }
-            : new String[] { " SuperTux 0.1.3 - J2ME", RELEASE, "Made by SuperTux Devel Team",
-                "Originally ported by", "Lars 'Anotherguest'", "2026 J2ME port by Jecka22LR" };
-        if (titleNote != null) {          // an edition's own line on top (x/g.txt T|...)
-          String[] c2 = new String[c.length + 1];
-          c2[0] = " " + titleNote;
-          System.arraycopy(c, 0, c2, 1, c.length);
-          c = c2;
+        if (detail < POTATO) {         // Potato and Max Potato: on the About screen instead
+          String[] c = creditLines();
+          int y0 = (landscape ? 392 : 535) - (c.length - (landscape ? 5 : 6)) * 17;
+          for (int i = 0; i < c.length; i++) Res.chars(g, Res.WHITE, c[i], 0, (y0 + 17 * i) / 2);
         }
-        int y0 = (landscape ? 392 : 535) - (c.length - (landscape ? 5 : 6)) * 17;
-        for (int i = 0; i < c.length; i++) Res.chars(g, Res.WHITE, c[i], 0, (y0 + 17 * i) / 2);
       }
     } else {
       status(g);
