@@ -520,6 +520,7 @@ final class Game extends GameCanvas implements Runnable {
       String fm = "";
       for (int i = 0; i < Sound.FORMATS.length; i++) if (Sound.formatAvailable(i)) fm += (fm.length() > 0 ? ", " : "") + Sound.FORMATS[i];
       v.addElement("SFX sets in this jar: " + fm);
+      v.addElement("Nokia sound: " + (NokiaProbe.available() ? "API found, " : "") + Sound.nokiaStatus);
       audioInfo = new String[v.size()];
       v.copyInto(audioInfo);
     }

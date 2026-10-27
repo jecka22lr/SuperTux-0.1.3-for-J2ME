@@ -147,7 +147,7 @@ final class Sound implements Runnable {
       else if (m == FAST) startFast(n);
       else if (m == MIDI || m == TONES) playMidi(n);
       else if (m == NOKIA) playNokia(n);
-      if (m != MIDI && m != TONES) {     // (MIDI and Tones sleep through their notes on purpose)
+      if (m != MIDI && m != TONES && !(m == NOKIA && nokia == null)) {     // (MIDI and Tones sleep through their notes on purpose)
         int ms = (int) (System.currentTimeMillis() - t0);
         if (ms > stallMax) stallMax = ms;
       }
@@ -180,15 +180,19 @@ final class Sound implements Runnable {
         MidiSfx s = new MidiSfx();
         if (s.open()) midi = s;
       } catch (Throwable e) { }
-    } else if (m == NOKIA && nokia == null && NokiaSfx.available()) {
-      try {
-        NokiaSfx s = new NokiaSfx();
-        for (int i = 0; i < COUNT; i++) {
-          byte[] b = readWav(i);
-          if (b != null) s.load(i, b);
-        }
-        nokia = s;
-      } catch (Throwable e) { }
+    } else if (m == NOKIA && nokia == null) {
+      nokiaStatus = "no Nokia sound API";
+      if (NokiaProbe.available()) {
+        try {
+          NokiaSfx s = new NokiaSfx();
+          for (int i = 0; i < COUNT; i++) {
+            byte[] b = readWav(i);
+            if (b != null) s.load(i, b);
+          }
+          nokiaStatus = s.loaded + " of " + COUNT + " effects loaded";
+          if (s.loaded > 0) nokia = s; else s.release();
+        } catch (Throwable e) { nokiaStatus = "Nokia sound API can't play WAV"; }
+      }
     }
   }
 
@@ -303,10 +307,13 @@ final class Sound implements Runnable {
     }
   }
 
+  // without a usable Nokia API the mode beeps like Tones instead of staying silent
   private void playNokia(int n) {
     NokiaSfx s = nokia;
-    if (s != null && !broken[n] && !s.play(n)) broken[n] = true;
+    if (s == null) { playMidi(n); return; }
+    if (!broken[n] && !s.play(n)) broken[n] = true;
   }
+  static String nokiaStatus = "not tried (pick Sound: Nokia)";
 
   void stop() {
     synchronized (this) { qHead = qTail; }
