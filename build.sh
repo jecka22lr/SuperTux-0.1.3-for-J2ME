@@ -37,6 +37,7 @@ cat > build/pg.pro <<P
 -dontwarn
 P
 $J/bin/java -jar $PG @build/pg.pro 2>&1 | grep -v JAVA_TOOL_OPTIONS | grep -i "error\|warn" || true
+python3 tools/repack.py dist/SuperTux.jar
 SIZE=$(stat -c %s dist/SuperTux.jar)
 { cat build/MANIFEST.MF; echo "MIDlet-Jar-URL: SuperTux.jar"; echo "MIDlet-Jar-Size: $SIZE"; } > dist/SuperTux.jad
 # the stock-only tile atlas (smaller, less RAM) for the jars without the mod, run inside their folder
@@ -50,7 +51,9 @@ mkdir -p build/lite && cd build/lite && unzip -q -o ../../dist/SuperTux.jar && r
   mv x/g-lite.txt x/g.txt && rm -f x/g-atnw.txt && rm -rf a16 a8 aa au && stock_tiles && \
   $J/bin/jar cfm ../../dist/SuperTux-lite.jar META-INF/MANIFEST.MF $(ls | grep -v META-INF) 2>&1 | grep -v JAVA_TOOL_OPTIONS || true
 cd ../..
+python3 tools/repack.py dist/SuperTux-lite.jar
 SIZE=$(stat -c %s dist/SuperTux-lite.jar)
+if [ "$SIZE" -ge 1000000 ]; then echo "lite jar is $SIZE bytes: over the 1 MB limit"; exit 1; fi
 { cat build/MANIFEST.MF; echo "MIDlet-Jar-URL: SuperTux-lite.jar"; echo "MIDlet-Jar-Size: $SIZE"; } > dist/SuperTux-lite.jad
 # the full jar without the ATTNW mod (MP3 music, everything GPL): the one to publish, since ATTNW's
 # music and many of its backgrounds come from other games
@@ -59,6 +62,7 @@ if [ -f res-atnw-only.txt ]; then
     xargs rm -f < ../../res-atnw-only.txt && mv x/g-lite.txt x/g.txt && rm -f x/g-atnw.txt && stock_tiles && \
     $J/bin/jar cfm ../../dist/SuperTux-noattnw.jar META-INF/MANIFEST.MF $(ls | grep -v META-INF) 2>&1 | grep -v JAVA_TOOL_OPTIONS || true
   cd ../..
+  python3 tools/repack.py dist/SuperTux-noattnw.jar
   SIZE=$(stat -c %s dist/SuperTux-noattnw.jar)
   { cat build/MANIFEST.MF; echo "MIDlet-Jar-URL: SuperTux-noattnw.jar"; echo "MIDlet-Jar-Size: $SIZE"; } > dist/SuperTux-noattnw.jad
 fi
@@ -71,6 +75,7 @@ if [ -f res-atnw-only.txt ]; then
       ../MANIFEST.MF > ../atnw.mf && \
     $J/bin/jar cfm ../../dist/SuperTux-ATTNW.jar ../atnw.mf $(ls | grep -v META-INF) 2>&1 | grep -v JAVA_TOOL_OPTIONS || true
   cd ../..
+  python3 tools/repack.py dist/SuperTux-ATTNW.jar
   SIZE=$(stat -c %s dist/SuperTux-ATTNW.jar)
   { cat build/atnw.mf; echo "MIDlet-Jar-URL: SuperTux-ATTNW.jar"; echo "MIDlet-Jar-Size: $SIZE"; } > dist/SuperTux-ATTNW.jad
 fi

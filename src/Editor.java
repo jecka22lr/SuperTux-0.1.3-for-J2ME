@@ -752,12 +752,15 @@ final class Editor {
       Res.drawTileImg(g, ghost != null ? ghost : Res.tileImg, curTile, (cursorX - posX) / 2, cursorY / 2, game.frameCounter);
     int col0 = posX / 32, cols = p / 16 + 2;
     for (int y = 0; y < 15; y++)
-      for (int x = col0; x < col0 + cols && x < lv.width; x++) {
+      for (int x = Math.max(0, col0 - 8); x < col0 + cols && x < lv.width; x++) {   // wide pictures from the left too
         int sx = (x * 32 - posX) / 2, sy = y * 16, i = y * lv.width + x;
         for (int l = 0; l < 3; l++) {
           int t = (l == 0 ? lv.bg : l == 1 ? lv.ia : lv.fg)[i] & 0xff;
-          if (t != 0) Res.drawTileImg(g, l == activeTm || ghost == null ? Res.tileImg : ghost, t, sx, sy, game.frameCounter);
+          if (t == 0) continue;
+          if (x < col0 && (Res.tFrames[t].length == 0 || sx + (Res.tfw[Res.tFrames[t][0]] & 0xff) <= 0)) continue;
+          Res.drawTileImg(g, l == activeTm || ghost == null ? Res.tileImg : ghost, t, sx, sy, game.frameCounter);
         }
+        if (x < col0) continue;
         int t = lv.ia[i] & 0xff;
         if (t < editorFrame.length && editorFrame[t] >= 0) {
           int f = editorFrame[t];

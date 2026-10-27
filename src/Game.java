@@ -62,7 +62,7 @@ final class Game extends GameCanvas implements Runnable {
   long stateT, stateMin;
   int endSequence;          // 0 none, 1 running, 2 waiting
   long endT;
-  float lastX;
+  float lastX; long lastXT; boolean endStuck;
   String message = "";
   Image bgImage; int bgImageNo = -1; int skyColor;
   Vector badguys = new Vector(), items = new Vector(), bullets = new Vector();
@@ -1336,10 +1336,12 @@ final class Game extends GameCanvas implements Runnable {
     int n = badguys.size();
     for (int i = 0; i < n; i++) {
       BadGuy a = (BadGuy) badguys.elementAt(i);
-      if (a.dying != BadGuy.DYING_NOT || a.removable || !a.seen) continue;   // not yet on screen: not moving
+      if (a.dying != BadGuy.DYING_NOT || a.removable) continue;
       for (int j = i + 1; j < n; j++) {
         BadGuy b = (BadGuy) badguys.elementAt(j);
-        if (b.dying != BadGuy.DYING_NOT || b.removable || !b.seen) continue;
+        if (b.dying != BadGuy.DYING_NOT || b.removable) continue;
+        if (!a.seen && !b.seen) continue;      // two still waiting off screen can't have moved into each other
+        // (a kicked Mr. Iceblock still knocks out one that hasn't woken up yet, as in 0.1.3)
         if (a.overlaps(b)) { b.collideBadguy(a); a.collideBadguy(b); }
       }
     }
@@ -1407,7 +1409,7 @@ final class Game extends GameCanvas implements Runnable {
   }
 
   void beginEnd(int kind) {
-    endSequence = kind; lastX = -1;
+    endSequence = kind; lastX = -1; lastXT = now; endStuck = false;
     music.play(Music.DONE);
     endT = now + 7000;
     tux.invincibleT = now + 7000;
@@ -1428,8 +1430,10 @@ final class Game extends GameCanvas implements Runnable {
     if (endSequence != 0) {
       tux.oldFire = tux.inFire;
       tux.inFire = false; tux.inLeft = false; tux.inRight = true; tux.inDown = false;
-      tux.inUp = (int) lastX == (int) tux.x;
-      lastX = tux.x;
+      // jump when stuck, judged over 50 ms rather than one frame: at a high frame rate Tux moves
+      // less than a pixel a frame, looked stuck every other frame and kept making tiny hops
+      if (now - lastXT >= 50 || now < lastXT) { endStuck = (int) lastX == (int) tux.x; lastX = tux.x; lastXT = now; }
+      tux.inUp = endStuck;
       return;
     }
     int k = currentKeys();
@@ -1583,7 +1587,7 @@ final class Game extends GameCanvas implements Runnable {
       int key = pressed ^ (sky << 8);
       if (touchImg == null || touchImg.getWidth() != sw || touchImg.getHeight() != h) { touchImg = Image.createImage(sw, h); touchImgKey = -1; }
       if (key != touchImgKey) {
-        Graphics tg = touchImg.getGraphics();
+        Graphics tg = Res.fresh(touchImg);
         fillSky(tg, 0, 0, sw, h, y0);
         tg.translate(0, -y0);
         drawButtons(tg, pressed, false);
@@ -1592,7 +1596,9 @@ final class Game extends GameCanvas implements Runnable {
       g.drawImage(touchImg, 0, y0, Graphics.TOP | Graphics.LEFT);
       return;
     }
-    drawButtons(g, pressed, detail != FULL);   // drawn every frame below Full: outlines and labels only
+    // drawn every frame: landscape below Full as outlines and labels only; portrait (RAM saver) the
+    // same as the cached picture
+    drawButtons(g, pressed, detail != FULL && landscape);
   }
 
   void drawButtons(Graphics g, int pressed, boolean plain) {
@@ -1698,6 +1704,9 @@ final class Game extends GameCanvas implements Runnable {
     long last = System.currentTimeMillis();
     while (running) {
       long t0 = System.currentTimeMillis();
+      // at least 10 ms a step (0.1.3's frame ratio 1): an emulator skipping sleeps ran the game
+      // hundreds of times a second, where Tux's sub-pixel steps behave differently
+      if (t0 - last < 10) { try { Thread.sleep(1); } catch (InterruptedException e) { } continue; }
       long dt = t0 - last; last = t0;
       if (dt > worstFrame) worstFrame = (int) dt;
       if (dt > 60) dt = 60;            // slow phone or a hiccup: don't jump too far
@@ -1984,7 +1993,8 @@ final class Game extends GameCanvas implements Runnable {
   void drawWorld(Graphics g) {
     int sx0 = (int) scrollX;
     int top = viewTop >> 1;
-    int col0 = (sx0 >> 5) - 4, col1 = (sx0 + viewW) >> 5;
+    reach();                           // pictures wider than a tile, starting left of the screen
+    int col0 = (sx0 >> 5) - reachX, col1 = (sx0 + viewW) >> 5;
     int ox = -(sx0 >> 1);
     if (detail != FULL && !ramSaver) {
       // Low and Potato: the tiles come from the cache, which covers the level's rows, so only the
@@ -1994,12 +2004,16 @@ final class Game extends GameCanvas implements Runnable {
       int bot = top + (Level.H << 4);
       fillSky(g, 0, bot, sw, sh - bot, bot);
       drawCached(g, sx0, top, sky);
-      if (detail == LOW) { drawAnimated(g, level.bg, col0, col1, ox, top); drawAnimated(g, level.ia, col0, col1, ox, top); }
+      if (detail == LOW) drawAnimated(g, col0, col1, ox, top);
     } else {
       background(g, scrollX);
       if (detail == FULL) particles(g, 0);
+      // tall pictures in the bottom rows stop at the level's bottom edge (the screen's edge in
+      // 0.1.3), as in the cached picture, instead of showing under the portrait touch buttons
+      g.setClip(0, 0, sw, top + (Level.H << 4));
       drawLayer(g, level.bg, col0, col1, ox, top, false);
       drawLayer(g, level.ia, col0, col1, ox, top, true);
+      g.setClip(0, 0, sw, sh);
     }
     if (detail < POTATO) for (int i = 0; i < NE; i++) if (bbOn[i])
       Res.drawTile(g, bbTile[i], ((int) bbX[i] - sx0) >> 1, ((int) (bbY[i] + bbOff[i]) + viewTop) >> 1, frameCounter);
@@ -2019,7 +2033,9 @@ final class Game extends GameCanvas implements Runnable {
               ((int) pbX[i] - sx0) >> 1, ((int) pbY[i] + viewTop) >> 1, Graphics.TOP | Graphics.LEFT);
       }
     }
+    g.setClip(0, 0, sw, top + (Level.H << 4));
     drawLayer(g, level.fg, col0, col1, ox, top, false);
+    g.setClip(0, 0, sw, sh);
     if (detail == FULL) particles(g, 1);
     g.setClip(0, 0, sw, sh);
   }
@@ -2079,17 +2095,52 @@ final class Game extends GameCanvas implements Runnable {
     }
   }
 
-  // Low: the animated tiles the cache leaves out, drawn each frame at their current frame
-  void drawAnimated(Graphics g, byte[] map, int col0, int col1, int ox, int top) {
+  // Low: the cached picture leaves out animated tiles (coins, water...). Each cell holding one is
+  // drawn again from the sky up, clipped to the cell, with every tile reaching into it in the usual
+  // order, so tiles drawn after the animated one (and see-through ones) still cover it correctly
+  void drawAnimated(Graphics g, int col0, int col1, int ox, int top) {
     int w = level.width;
     if (col0 < 0) col0 = 0;
     if (col1 >= w) col1 = w - 1;
+    reach();
+    boolean clipped = false;
     for (int y = 0; y < Level.H; y++) {
       int row = y * w;
       for (int x = col0; x <= col1; x++) {
-        int t = map[row + x] & 0xff;
-        if (t == 0 || Res.tFrames[t].length < 2 || (map == level.ia && bouncing(x, y))) continue;
-        Res.drawTile(g, t, ox + (x << 4), top + (y << 4), frameCounter);
+        int tb = level.bg[row + x] & 0xff, ti = level.ia[row + x] & 0xff;
+        if (Res.tFrames[tb].length < 2 && (Res.tFrames[ti].length < 2 || bouncing(x, y))) continue;
+        int px = ox + (x << 4), py = top + (y << 4);
+        g.setClip(px, py, 16, 16); clipped = true;
+        fillSky(g, px, py, 16, 16, py);
+        for (int l = 0; l < 2; l++) {
+          byte[] map = l == 0 ? level.bg : level.ia;
+          for (int ry = Math.max(0, y - reachY); ry <= y; ry++)
+            for (int rx = Math.max(0, x - reachX); rx <= x; rx++) {
+              int t = map[ry * w + rx] & 0xff;
+              if (t == 0 || (l == 1 && bouncing(rx, ry))) continue;
+              short[] fr = Res.tFrames[t];
+              if (fr.length == 0) continue;
+              if (((x - rx) << 4) >= (Res.tfw[fr[0]] & 0xff) || ((y - ry) << 4) >= (Res.tfh[fr[0]] & 0xff)) continue;
+              Res.drawTile(g, t, ox + (rx << 4), top + (ry << 4), frameCounter);
+            }
+        }
+      }
+    }
+    if (clipped) g.setClip(0, 0, sw, sh);
+  }
+
+  // how far this level's biggest tile pictures reach right and down, in cells (most levels: 0)
+  Level reachLevel; int reachX, reachY;
+  void reach() {
+    if (reachLevel == level) return;
+    reachLevel = level; reachX = 0; reachY = 0;
+    for (int l = 0; l < 3; l++) {
+      byte[] map = l == 0 ? level.bg : l == 1 ? level.ia : level.fg;
+      for (int i = 0; i < map.length; i++) {
+        short[] fr = Res.tFrames[map[i] & 0xff];
+        if (fr.length == 0) continue;
+        reachX = Math.max(reachX, ((Res.tfw[fr[0]] & 0xff) - 1) >> 4);
+        reachY = Math.max(reachY, ((Res.tfh[fr[0]] & 0xff) - 1) >> 4);
       }
     }
   }
@@ -2113,9 +2164,10 @@ final class Game extends GameCanvas implements Runnable {
     if (tcLevel != level || tcSky != sky || tcDetail != detail) {
       tcLevel = level; tcSky = sky; tcDetail = detail; tcLast = -1;
     } else if (tcChanges != level.changes && tcLast >= 0) {
-      // a coin, brick or bonus block changed: redraw just those columns (and up to 7 to their right,
+      // a coin, brick or bonus block changed: redraw just those columns (and as far right as the widest tile,
       // which a wide tile there could reach into)
-      int a = Math.max(level.chMin, tcFirst), b = Math.min(level.chMax + 7, tcLast);
+      reach();
+      int a = Math.max(level.chMin, tcFirst), b = Math.min(level.chMax + reachX, tcLast);
       for (int c = a; c <= b; c++) cacheColumn(c, top);
     }
     tcChanges = level.changes; level.chMin = Integer.MAX_VALUE; level.chMax = -1;
@@ -2129,12 +2181,13 @@ final class Game extends GameCanvas implements Runnable {
   }
 
   // one column, drawn like drawLayer would (bg then ia, rows top to bottom) but clipped to the
-  // column; tiles up to 8 columns to the left can be wide enough to reach into it
+  // column; tiles from as far left as the level's widest picture reaches can reach into it
   void cacheColumn(int c, int top) {
     int x = (c % tcN) << 4, h = Level.H << 4, w = level.width;
     tcG.setClip(x, 0, 16, h);
     fillSky(tcG, x, 0, 16, h, top);
-    int a = Math.max(0, c - 7), b = Math.min(c, w - 1);
+    reach();
+    int a = Math.max(0, c - reachX), b = Math.min(c, w - 1);
     for (int l = 0; l < 2; l++) {
       byte[] map = l == 0 ? level.bg : level.ia;
       for (int y = 0; y < Level.H; y++) {
@@ -2186,7 +2239,7 @@ final class Game extends GameCanvas implements Runnable {
       Graphics gg0 = g;
       if (cache) {
         if (gradImg == null || gradImg.getWidth() != sw || gradImg.getHeight() != sh) gradImg = Image.createImage(sw, sh);
-        g = gradImg.getGraphics(); gradA = a; gradB = b;
+        g = Res.fresh(gradImg); gradA = a; gradB = b;
       } else gradImg = null;
       for (int y = 0; y < sh; y += 4) {
         int r = ((a >> 16) * (sh - y) + (b >> 16) * y) / sh;
@@ -2268,7 +2321,7 @@ final class Game extends GameCanvas implements Runnable {
   Image hudImg; int hudSky = -1, hudScore = -1, hudTl = -1, hudCoins = -1, hudLives = -1, hudFlags = -1; String hudFps;
 
   void status(Graphics g) {
-    int hh = showFps ? 30 : 20;
+    int hh = showFps ? 32 : 22;          // the lives Tux reaches 2 px under the second row
     if (landscape || detail == FULL || ramSaver || testMode || (viewTop >> 1) < hh) { statusDraw(g); return; }
     int tl = (int) ((timeEnd - now) / 1000);
     if (tl < 0) tl = 0;
@@ -2278,7 +2331,7 @@ final class Game extends GameCanvas implements Runnable {
     if (hudImg == null || hudImg.getWidth() != sw || hudImg.getHeight() != hh) { hudImg = Image.createImage(sw, hh); hudFlags = -1; }
     if (sky != hudSky || score != hudScore || tl != hudTl || distros != hudCoins || lives != hudLives || flags != hudFlags
         || (showFps && fpsText != hudFps)) {
-      Graphics hg = hudImg.getGraphics();
+      Graphics hg = Res.fresh(hudImg);
       fillSky(hg, 0, 0, sw, hh, 0);
       statusDraw(hg);
       hudSky = sky; hudScore = score; hudTl = tl; hudCoins = distros; hudLives = lives; hudFlags = flags; hudFps = fpsText;

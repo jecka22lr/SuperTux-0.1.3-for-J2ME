@@ -251,7 +251,7 @@ final class Menu {
       if (boxW > 0 && boxH > 0) {
         if (cache == null || cache.getWidth() != boxW || cache.getHeight() != boxH)
           cache = javax.microedition.lcdui.Image.createImage(boxW, boxH);
-        Graphics cg = cache.getGraphics();
+        Graphics cg = Res.fresh(cache);
         cg.translate(-boxX, -boxY);
         drawDirect(cg, cx, sh, portrait, now);
         cacheKey = key;

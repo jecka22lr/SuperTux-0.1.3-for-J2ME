@@ -64,6 +64,24 @@ def strs(lst, name):
     return [v[1] for v in f if isinstance(v, tuple)]
 
 # ---------- atlas packer (shelf) ----------
+# The half-size data has the waterfall tiles at quarter size (8x8): drawn as they are they left a
+# grid of gaps. Use the PC 0.1.3 image halved (ORIG=.../supertux-0.1.3 PC data dir), or else the
+# small one doubled.
+ORIG = os.environ.get('ORIG')
+def full_tile(p):
+    im = Image.open(p)
+    if ORIG:     # any tile that isn't the PC one at half size (the 8x8 waterfalls, 17x18 clouds)
+        o = os.path.join(ORIG, 'images', 'tilesets', os.path.basename(p))
+        if os.path.exists(o):
+            os_ = Image.open(o).size
+            if im.size != (max(1, os_[0] // 2), max(1, os_[1] // 2)): return half(o)
+    if im.size[0] >= 16 or im.size[1] >= 16: return p
+    os.makedirs(HALF, exist_ok=True)
+    out = os.path.join(HALF, 'x2_' + os.path.basename(p))
+    if not os.path.exists(out):
+        im.convert('RGBA').resize((im.size[0] * 2, im.size[1] * 2), Image.NEAREST).save(out)
+    return out
+
 class Atlas:
     def __init__(self, width):
         self.w = width; self.items = []; self.index = {}
@@ -134,10 +152,15 @@ def write_tiles(tids, suffix):
         for fn in tiles[tid]['images']:
             p = os.path.join(IMG, 'tilesets', fn)
             if fn == 'notile.png' or not os.path.exists(p): continue
-            tiles[tid]['frames'].append(ta.add(p))
+            tiles[tid]['frames'].append(ta.add(full_tile(p)))
         ed = [fn for fn in tiles[tid]['editor'] if os.path.exists(os.path.join(IMG, 'tilesets', fn))]
         tiles[tid]['edframe'] = ta.add(os.path.join(IMG, 'tilesets', ed[0])) if ed else -1
     save_png(ta.pack(), os.path.join(OUT, 'res', 't%s.png' % suffix))
+    if suffix == '':      # for checking the atlas against the PC images (harness TileCheck)
+        os.makedirs(os.path.join(OUT, 'build'), exist_ok=True)
+        with open(os.path.join(OUT, 'build', 'tiles.txt'), 'w') as f:
+            for tid in tids:
+                f.write('%d %d %s\n' % (cidx[tid], tid, ' '.join(tiles[tid]['images'])))
     with open(os.path.join(OUT, 'res', 't%s.bin' % suffix), 'wb') as f:
         f.write(struct.pack('>H', len(ta.rects)))
         for r in ta.rects: f.write(struct.pack('>BBBB', r[0], r[1] & 0xff, r[2], r[3]) + struct.pack('>B', r[1] >> 8))

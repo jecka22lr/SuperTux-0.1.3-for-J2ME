@@ -177,6 +177,15 @@ final class Res {
     return new String(c);
   }
 
+  // a reused image's Graphics with no translation or clip left over: some VMs (FreeJ2ME) hand back
+  // the same object every time, still translated from the last redraw
+  static Graphics fresh(javax.microedition.lcdui.Image img) {
+    Graphics g = img.getGraphics();
+    g.translate(-g.getTranslateX(), -g.getTranslateY());
+    g.setClip(0, 0, img.getWidth(), img.getHeight());
+    return g;
+  }
+
   static void chars(Graphics g, int font, String s, int x, int y) {
     int n = s.length();
     for (int i = 0; i < n; i++) {

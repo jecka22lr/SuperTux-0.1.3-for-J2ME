@@ -185,7 +185,7 @@ final class BadGuy extends Body {
     if (mode == STALACTITE_SHAKING) {
       // Potato: a small left/right step every 100 ms instead of a random jitter every frame
       if (game.detail >= Game.POTATO) x = homeX + (((game.frameCounter >> 2) & 1) == 0 ? -2 : 2);
-      else x = homeX + (rnd.nextInt() % 3);
+      else x = homeX + (rnd.nextInt() & 0x7fffffff) % 6 - 3;      // rand() % 6 - 3
       if (!timerRunning()) mode = STALACTITE_FALL;
     } else if (mode == STALACTITE_FALL) {
       fall();

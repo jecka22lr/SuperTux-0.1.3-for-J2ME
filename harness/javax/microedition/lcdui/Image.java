@@ -15,6 +15,8 @@ public class Image {
   public static Image createImage(int w, int h) { return new Image(new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)); }
   public int getWidth() { return b.getWidth(); }
   public int getHeight() { return b.getHeight(); }
-  public Graphics getGraphics() { return new Graphics(b.createGraphics()); }
+  // like FreeJ2ME: the same Graphics every time, keeping its translation and clip
+  private Graphics gfx;
+  public Graphics getGraphics() { if (gfx == null) gfx = new Graphics(b.createGraphics()); return gfx; }
   public void getRGB(int[] d, int off, int scan, int x, int y, int w, int h) { b.getRGB(x, y, w, h, d, off, scan); }
 }

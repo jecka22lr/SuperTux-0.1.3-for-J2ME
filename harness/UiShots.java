@@ -9,7 +9,8 @@ public class UiShots {
   static Game g; static File out; static String tag;
 
   static void shot(String name) throws Exception {
-    if (Menu.current != null) Menu.current.effectEnd = 0;     // the slide-in finished
+    if (Menu.current != null) Menu.current.effectEnd = 0;
+    g.draw(new Graphics(new BufferedImage(g.sw, g.sh, BufferedImage.TYPE_INT_RGB).createGraphics()));   // twice: the second uses any cache     // the slide-in finished
     BufferedImage img = new BufferedImage(g.sw, g.sh, BufferedImage.TYPE_INT_RGB);
     Graphics gr = new Graphics(img.createGraphics());
     g.draw(gr);
@@ -23,10 +24,10 @@ public class UiShots {
     SuperTux m = new SuperTux(); g = new Game(m); Res.load();
     for (int i = 0; i < Res.tFlags.length; i++) if ((Res.tFlags[i] & Res.DISTRO) != 0) { g.coinTile = i; break; }
     Menu.noEffects = true;
-    int[][] combos = { { 0, 1, 0 }, { 1, 1, 0 }, { 0, 0, 0 }, { 1, 0, 0 }, { 0, 1, 2 }, { 1, 1, 2 } };   // landscape, touch, detail
+    int[][] combos = { { 0, 1, 0 }, { 1, 1, 0 }, { 0, 0, 0 }, { 1, 0, 0 }, { 0, 1, 1 }, { 1, 1, 1 }, { 0, 1, 2 }, { 1, 1, 2 }, { 0, 1, 3 }, { 1, 1, 3 } };   // landscape, touch, detail
     for (int c = 0; c < combos.length; c++) {
       boolean land = combos[c][0] == 1; g.showTouch = combos[c][1] == 1; g.detail = combos[c][2];
-      Menu.noEffects = g.detail >= Game.POTATO;
+      Menu.noEffects = g.detail >= Game.POTATO; Res.setHardSprites(g.detail == Game.MAXPOTATO);
       g.buildMainMenu();
       g.setLayout(land);
       tag = (land ? "L" : "P") + (g.showTouch ? "t" : "k") + g.detail;
@@ -106,6 +107,21 @@ public class UiShots {
       g.editor.pressButton(Editor.B_SETTINGS); shot("28editorsettings");
       Menu.setCurrent(null, 0);
       g.state = Game.TITLE;
+    }
+    // her report: in a level, Options, Detail Full -> Max Potato, then close and reopen Options
+    for (int land = 0; land < 2; land++) {
+      g.showTouch = true; g.detail = Game.FULL; Menu.noEffects = false; Res.setHardSprites(false);
+      g.setLayout(land == 1); tag = (land == 1 ? "L" : "P") + "switch";
+      g.worldmap = null; g.levelId = "a1"; g.demo = false; g.level = null; g.loadLevel(false); g.startPlay();
+      Menu.setCurrent(g.gameMenu, 0); Menu.push(g.optionsMenu, 0);
+      g.optionsMenu.setList(Game.M_DETAIL, Game.DETAIL_MODES, Game.FULL); shot("1full");
+      for (int d = 1; d <= 3; d++) {
+        g.optionsMenu.setList(Game.M_DETAIL, Game.DETAIL_MODES, d); g.optionsChanged(); shot("2detail" + d);
+        g.optionsMenu.active = (g.optionsMenu.active + 1) % g.optionsMenu.count; shot("3moved" + d);
+      }
+      Menu.pop(0); shot("4pause"); Menu.push(g.optionsMenu, 0); shot("5reopen");
+      g.optionsMenu.setList(Game.M_DETAIL, Game.DETAIL_MODES, 0); g.optionsChanged(); shot("6backfull");
+      Menu.setCurrent(null, 0);
     }
     System.exit(0);
   }
