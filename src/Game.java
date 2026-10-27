@@ -222,12 +222,12 @@ final class Game extends GameCanvas implements Runnable {
 
   // ---------------- settings ----------------
   void loadSettings() {
-    landscape = getWidth() > getHeight();
+    wantLandscape = getWidth() > getHeight();
     try { showTouch = hasPointerEvents(); } catch (Throwable e) { }
     try {
       byte[] b = WorldMap.read("stux");
       if (b != null) {
-        landscape = b[0] != 0;
+        wantLandscape = b[0] != 0;
         music.enabled = b[1] != 0; music.midiOnly = b[1] == 2;
         if (b.length > 3) { sounds.mode = soundModeOf(b[2]); showFps = b[3] != 0; }
         if (b.length > 4 && b[4] >= 2 && b[4] <= 9) {
@@ -247,7 +247,7 @@ final class Game extends GameCanvas implements Runnable {
       }
     } catch (Throwable e) { }
     Menu.noEffects = detail >= POTATO;
-    setLayout(landscape);
+    setLayout(wantLandscape);
   }
 
   // settings byte 2: 0 off, 1 normal (what older versions saved for off / on), 2 fast, 3 MIDI, 4 Nokia, 5 tones
@@ -262,7 +262,7 @@ final class Game extends GameCanvas implements Runnable {
     try {
       java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
       java.io.DataOutputStream out = new java.io.DataOutputStream(bo);
-      out.writeByte(landscape ? 1 : 0); out.writeByte(!music.enabled ? 0 : music.midiOnly ? 2 : 1); out.writeByte(soundByte(sounds.mode));
+      out.writeByte(wantLandscape ? 1 : 0); out.writeByte(!music.enabled ? 0 : music.midiOnly ? 2 : 1); out.writeByte(soundByte(sounds.mode));
       out.writeByte(showFps ? 1 : 0); out.writeByte(9);
       for (int i = 0; i < 5; i++) out.writeInt(keymapUp[i]);
       out.writeInt(hsScore); out.writeUTF(hsName);
@@ -288,12 +288,18 @@ final class Game extends GameCanvas implements Runnable {
   volatile boolean layoutDirty;
   protected void sizeChanged(int w, int h) { layoutDirty = true; }
 
+  // Options > Landscape. The layout used is landscape when that is on, or whenever the screen itself
+  // is wider than tall (a phone turned sideways with a rotation sensor, a landscape-only phone,
+  // J2ME Loader turned): a portrait picture never sits cut off between black bars.
+  boolean wantLandscape;
   void setLayout(boolean land) {
-    landscape = land;
+    wantLandscape = land;
     boolean deviceLandscape = getWidth() > getHeight();
+    landscape = land || deviceLandscape;
     rotate = land && !deviceLandscape;
-    if (!landKeysSet) System.arraycopy(land && rotate ? KEY_DEFAULT_SIDE : KEY_DEFAULT, 0, keymapLand, 0, 5);
-    if (land) { sw = 320; sh = 240; viewW = 640; viewTop = 0; }
+    keys = 0; joyKeys = 0;              // what a held key means may have just turned with the screen
+    if (!landKeysSet) System.arraycopy(rotate ? KEY_DEFAULT_SIDE : KEY_DEFAULT, 0, keymapLand, 0, 5);
+    if (landscape) { sw = 320; sh = 240; viewW = 640; viewTop = 0; }
     else { sw = 240; sh = 320; viewW = 480; viewTop = showTouch ? 64 : 160; }   // touch buttons: level above them
     buffer = rotate ? Image.createImage(320, 240) : null;
     if (level != null) clampScroll();
@@ -318,7 +324,7 @@ final class Game extends GameCanvas implements Runnable {
         .add(Menu.STRINGSELECT, "Draw cap  ", M_DRAWCAP)
         .add(Menu.TOGGLE, "RAM saver ", M_RAM, null, ramSaver)
         .add(Menu.TOGGLE, "Show FPS  ", M_FPS, null, showFps)
-        .add(Menu.TOGGLE, "Landscape ", M_LANDSCAPE, null, landscape)
+        .add(Menu.TOGGLE, "Landscape ", M_LANDSCAPE, null, wantLandscape)
         .add(Menu.TOGGLE, "Show touch", M_TOUCH, null, showTouch)
         .add(Menu.GOTO, "Keyboard Setup", 0, keysMenu = new Menu(), false)
         .add(Menu.GOTO, "Option Help", M_OPTHELP, null, false)    // no target: opens the help pages
@@ -561,11 +567,14 @@ final class Game extends GameCanvas implements Runnable {
       Menu.setCurrent(optionsMenu, now); Menu.push(keysMenu, now);
       return;
     }
+    // the one field just set (the menu still shows the old keys everywhere else). Swapping inside the
+    // loop used to undo itself: giving Right the Jump key swapped them, then the Jump row, still
+    // showing the old key, swapped them straight back.
     boolean ch = false;
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 5 && !ch; i++) {
       int c = keysMenu.codeOf(M_KEYS + i);
       if (c != k[i]) {
-        for (int j = 0; j < 5; j++) if (j != i && k[j] == c) { k[j] = k[i]; }   // a key does one job: swap
+        for (int j = 0; j < 5; j++) if (j != i && k[j] == c) k[j] = k[i];   // a key does one job: swap
         k[i] = c; ch = true;
       }
     }
@@ -652,8 +661,8 @@ final class Game extends GameCanvas implements Runnable {
     if (optionsMenu.find(M_PAUSEMUS) >= 0) sounds.pauseMusic = optionsMenu.isToggled(M_PAUSEMUS);
 
     showFps = optionsMenu.isToggled(M_FPS);
-    if (showTouch != optionsMenu.isToggled(M_TOUCH)) { showTouch = !showTouch; setLayout(landscape); }
-    if (landscape != optionsMenu.isToggled(M_LANDSCAPE)) setLayout(!landscape);
+    if (showTouch != optionsMenu.isToggled(M_TOUCH)) { showTouch = !showTouch; setLayout(wantLandscape); }
+    if (wantLandscape != optionsMenu.isToggled(M_LANDSCAPE)) setLayout(!wantLandscape);
     saveSettings();
   }
 
@@ -967,7 +976,7 @@ final class Game extends GameCanvas implements Runnable {
       "Off|Keeps pictures ready in memory for speed." },
     { "Other options",
       "Show FPS|Frames per second under the score.",
-      "Landscape|The 320x240 layout. On an upright phone it is turned sideways.",
+      "Landscape|The 320x240 layout. On an upright phone it is turned sideways. A phone turned sideways (or a landscape screen) uses it either way.",
       "Show touch|On-screen buttons and a MENU box for touch screens.",
       "Keyboard Setup|Pick the key for each action. Portrait and Landscape keep their own keys: set them in each." }
   };
@@ -1446,18 +1455,20 @@ final class Game extends GameCanvas implements Runnable {
     tux.inFire = (k & K_FIRE) != 0;
   }
 
-  int currentKeys() {
-    int ks = getKeyStates();
-    int k = keys;
-    int up = UP_PRESSED, down = DOWN_PRESSED, left = LEFT_PRESSED, right = RIGHT_PRESSED;
-    if (rotate) { up = RIGHT_PRESSED; down = LEFT_PRESSED; left = UP_PRESSED; right = DOWN_PRESSED; }
-    if ((ks & left) != 0) k |= K_LEFT;
-    if ((ks & right) != 0) k |= K_RIGHT;
-    if ((ks & up) != 0) k |= K_UP;
-    if ((ks & down) != 0) k |= K_DOWN;
-    if ((ks & FIRE_PRESSED) != 0) k |= K_SELECT;
-    return k | touchKeys;
+  // The joystick, held: tracked from its own presses. (getKeyStates() also reports number keys as
+  // directions, so a number key bound to something else did that and a direction too, turned
+  // sideways in landscape: 6 bound to Right also jumped.)
+  int joyKeys;
+  int joyBits(int code) {
+    if ((code >= KEY_NUM0 && code <= KEY_NUM9) || code == KEY_STAR || code == KEY_POUND) return 0;
+    int a = 0;
+    try { a = getGameAction(code); } catch (Throwable e) { }
+    if (a == FIRE) return K_SELECT;
+    if (rotate) return a == UP ? K_LEFT : a == DOWN ? K_RIGHT : a == LEFT ? K_DOWN : a == RIGHT ? K_UP : 0;
+    return a == UP ? K_UP : a == DOWN ? K_DOWN : a == LEFT ? K_LEFT : a == RIGHT ? K_RIGHT : 0;
   }
+
+  int currentKeys() { return keys | joyKeys | touchKeys; }
 
   // Number keys. Upright: 4/6 walk, 1/3 run, 2 jump, 5 jump/select, 7/9 jump while walking, 8 duck,
   // 0 fire/run. Sideways (keypad on the right) the same layout as seen by the player.
@@ -1514,7 +1525,9 @@ final class Game extends GameCanvas implements Runnable {
   }
 
   public void keyPressed(int code) {
-    keys |= keyBits(code);
+    int kb = keyBits(code);
+    keys |= kb;
+    if (kb == 0) joyKeys |= joyBits(code);      // a joystick bound in Keyboard Setup acts as bound
     if (code == 0) return;
     synchronized (evq) {
       int next = (evTail + 1) % evq.length;
@@ -1522,7 +1535,7 @@ final class Game extends GameCanvas implements Runnable {
     }
   }
 
-  public void keyReleased(int code) { keys &= ~keyBits(code); }
+  public void keyReleased(int code) { keys &= ~keyBits(code); joyKeys &= ~joyBits(code); }
 
   // ---------------- touch ----------------
   static final int T_PRESS = 1, T_DRAG = 2, T_RELEASE = 3;
@@ -1751,7 +1764,7 @@ final class Game extends GameCanvas implements Runnable {
   }
 
   void frame(long dt) {
-    if (layoutDirty) { layoutDirty = false; setLayout(landscape); }
+    if (layoutDirty) { layoutDirty = false; setLayout(wantLandscape); }
     int ev = 0, e;
     nCodes = 0;
     while ((e = nextEvent()) != 0) {

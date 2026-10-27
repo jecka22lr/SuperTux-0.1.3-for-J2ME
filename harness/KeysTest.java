@@ -30,6 +30,31 @@ public class KeysTest {
     check(g2.keyBits(Game.KEY_NUM3) != Game.K_LEFT && !g2.landKeysSet, "landscape Default Keys");
     g2.setLayout(false);
     check(g2.keyBits(Game.KEY_NUM1) == Game.K_UP, "portrait untouched by landscape Default Keys");
+    // a number key bound to an action does only that (no direction from the key states), upright
+    // and sideways
+    Game g3 = new Game(new SuperTux());
+    javax.microedition.lcdui.Displayable.W = 240; javax.microedition.lcdui.Displayable.H = 320;
+    g3.setLayout(true);
+    check(g3.rotate, "sideways on an upright screen");
+    bind(g3, 1, Game.KEY_NUM6);                       // Right on 6
+    g3.keyPressed(Game.KEY_NUM6);
+    check(g3.currentKeys() == Game.K_RIGHT, "sideways: 6 bound to Right gives only Right (" + g3.currentKeys() + ")");
+    g3.keyReleased(Game.KEY_NUM6);
+    check(g3.currentKeys() == 0, "released");
+    g3.keyPressed(-4); check(g3.currentKeys() != 0, "joystick still works sideways"); g3.keyReleased(-4);
+    check(g3.currentKeys() == 0, "joystick released");
+    // a rotation sensor: the screen turns wide
+    javax.microedition.lcdui.Displayable.W = 320; javax.microedition.lcdui.Displayable.H = 240;
+    g3.sizeChanged(320, 240); if (g3.layoutDirty) { g3.layoutDirty = false; g3.setLayout(g3.wantLandscape); }
+    check(g3.landscape && !g3.rotate && g3.sw == 320, "phone turned: landscape, not drawn sideways");
+    g3.optionsMenu.setToggled(Game.M_LANDSCAPE, true); g3.optionsMenu.active = g3.optionsMenu.find(Game.M_LANDSCAPE); g3.optionsMenu.action(Menu.A_HIT, 0); g3.optionsChanged();
+    check(!g3.wantLandscape && g3.landscape && g3.sw == 320, "Landscape off while held sideways: stays landscape, no black bars");
+    javax.microedition.lcdui.Displayable.W = 240; javax.microedition.lcdui.Displayable.H = 320;
+    g3.sizeChanged(240, 320); if (g3.layoutDirty) { g3.layoutDirty = false; g3.setLayout(g3.wantLandscape); }
+    check(!g3.landscape && g3.sw == 240, "turned back upright: portrait");
+    g3.keyPressed(Game.KEY_NUM6); check(g3.currentKeys() == Game.K_RIGHT, "portrait: 6 is Right"); g3.keyReleased(Game.KEY_NUM6);
+    bind(g3, 2, Game.KEY_NUM6);                       // portrait: Jump on 6
+    g3.keyPressed(Game.KEY_NUM6); check(g3.currentKeys() == Game.K_UP, "portrait: 6 bound to Jump only jumps (" + g3.currentKeys() + ")"); g3.keyReleased(Game.KEY_NUM6);
     System.out.println(fails == 0 ? "ALL OK" : fails + " FAILED");
     System.exit(0);
   }
