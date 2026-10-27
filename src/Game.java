@@ -96,14 +96,17 @@ final class Game extends GameCanvas implements Runnable {
   private final int[] evq = new int[16];
   int[] codes = new int[16]; int nCodes;            // keys pressed this frame
   // Keyboard Setup, like the Symbian build's keymap: one key each for left, right, jump, duck and
-  // power/run. A key moved away stops doing its old job. Upright and sideways have a map each.
+  // power/run. A key moved away stops doing its old job. Portrait and Landscape have a map each,
+  // set separately. Landscape starts from the upright keys on a landscape screen (or a slid-out
+  // keyboard) and from the turned keys when the picture is drawn sideways on an upright phone.
   static final int[] KEY_DEFAULT = { KEY_NUM4, KEY_NUM6, KEY_NUM2, KEY_NUM8, KEY_NUM0 };
   static final int[] KEY_DEFAULT_SIDE = { KEY_NUM2, KEY_NUM8, KEY_NUM6, KEY_NUM4, KEY_NUM0 };
   static final int[] KEY_BIT = { K_LEFT, K_RIGHT, K_UP, K_DOWN, K_FIRE };
   int[] keymapUp = { KEY_NUM4, KEY_NUM6, KEY_NUM2, KEY_NUM8, KEY_NUM0 };
-  int[] keymapSide = { KEY_NUM2, KEY_NUM8, KEY_NUM6, KEY_NUM4, KEY_NUM0 };
-  int[] keymap() { return rotate ? keymapSide : keymapUp; }
-  int[] keyDefaults() { return rotate ? KEY_DEFAULT_SIDE : KEY_DEFAULT; }
+  int[] keymapLand = { KEY_NUM4, KEY_NUM6, KEY_NUM2, KEY_NUM8, KEY_NUM0 };
+  boolean landKeysSet;      // false: Landscape follows the defaults for how the screen is turned
+  int[] keymap() { return landscape ? keymapLand : keymapUp; }
+  int[] keyDefaults() { return landscape && rotate ? KEY_DEFAULT_SIDE : KEY_DEFAULT; }
   boolean bound(int code) { int[] k = keymap(); for (int i = 0; i < 5; i++) if (k[i] == code) return true; return false; }
   private int evHead, evTail;
 
@@ -227,16 +230,19 @@ final class Game extends GameCanvas implements Runnable {
         landscape = b[0] != 0;
         music.enabled = b[1] != 0; music.midiOnly = b[1] == 2;
         if (b.length > 3) { sounds.mode = soundModeOf(b[2]); showFps = b[3] != 0; }
-        if (b.length > 4 && b[4] >= 2 && b[4] <= 8) {
+        if (b.length > 4 && b[4] >= 2 && b[4] <= 9) {
           java.io.DataInputStream in = new java.io.DataInputStream(new java.io.ByteArrayInputStream(b, 5, b.length - 5));
           for (int i = 0; i < 5; i++) keymapUp[i] = in.readInt();
           hsScore = in.readInt(); hsName = in.readUTF();
-          if (b[4] >= 3) for (int i = 0; i < 5; i++) keymapSide[i] = in.readInt();
+          if (b[4] >= 3) for (int i = 0; i < 5; i++) keymapLand[i] = in.readInt();
+          // before version 9 this was the sideways map: keep it only if it was changed
+          landKeysSet = b[4] >= 3 && (b[4] >= 9 || !same(keymapLand, KEY_DEFAULT_SIDE));
           if (b[4] >= 4) showTouch = in.readBoolean();
           if (b[4] >= 5) detail = Math.max(FULL, Math.min(MAXPOTATO, in.readByte()));
           if (b[4] >= 6) { fpsCap = Math.max(0, Math.min(FPSCAP_MS.length - 1, in.readByte())); ramSaver = in.readBoolean(); }
           if (b[4] >= 7) drawCap = Math.max(0, Math.min(DRAWCAP_MS.length - 1, in.readByte()));
           if (b[4] >= 8) { int f = in.readByte(); if (f > 0 && f < Sound.FORMATS.length && getClass().getResourceAsStream("/a16/0.wav") != null && Sound.formatAvailable(f)) sounds.format = f; }   // test builds only
+          if (b[4] >= 9) landKeysSet = in.readBoolean();
         }
       }
     } catch (Throwable e) { }
@@ -257,15 +263,16 @@ final class Game extends GameCanvas implements Runnable {
       java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
       java.io.DataOutputStream out = new java.io.DataOutputStream(bo);
       out.writeByte(landscape ? 1 : 0); out.writeByte(!music.enabled ? 0 : music.midiOnly ? 2 : 1); out.writeByte(soundByte(sounds.mode));
-      out.writeByte(showFps ? 1 : 0); out.writeByte(8);
+      out.writeByte(showFps ? 1 : 0); out.writeByte(9);
       for (int i = 0; i < 5; i++) out.writeInt(keymapUp[i]);
       out.writeInt(hsScore); out.writeUTF(hsName);
-      for (int i = 0; i < 5; i++) out.writeInt(keymapSide[i]);
+      for (int i = 0; i < 5; i++) out.writeInt(keymapLand[i]);
       out.writeBoolean(showTouch);
       out.writeByte(detail);
       out.writeByte(fpsCap); out.writeBoolean(ramSaver);
       out.writeByte(drawCap);
       out.writeByte(sounds.format);
+      out.writeBoolean(landKeysSet);
       out.close();
       byte[] b = bo.toByteArray();
       RecordStore rs = RecordStore.openRecordStore("stux", true);
@@ -274,10 +281,18 @@ final class Game extends GameCanvas implements Runnable {
     } catch (Throwable e) { }
   }
 
+  static boolean same(int[] a, int[] b) { for (int i = 0; i < a.length; i++) if (a[i] != b[i]) return false; return true; }
+
+  // the screen turned (J2ME Loader rotating, a keyboard sliding out): work out sideways drawing again
+  // on the game thread
+  volatile boolean layoutDirty;
+  protected void sizeChanged(int w, int h) { layoutDirty = true; }
+
   void setLayout(boolean land) {
     landscape = land;
     boolean deviceLandscape = getWidth() > getHeight();
     rotate = land && !deviceLandscape;
+    if (!landKeysSet) System.arraycopy(land && rotate ? KEY_DEFAULT_SIDE : KEY_DEFAULT, 0, keymapLand, 0, 5);
     if (land) { sw = 320; sh = 240; viewW = 640; viewTop = 0; }
     else { sw = 240; sh = 320; viewW = 480; viewTop = showTouch ? 64 : 160; }   // touch buttons: level above them
     buffer = rotate ? Image.createImage(320, 240) : null;
@@ -540,6 +555,7 @@ final class Game extends GameCanvas implements Runnable {
     if (keysMenu.check() == M_KEYS + 9) {          // Default Keys (an ACTION closes the menus: reopen)
       int[] d = keyDefaults();
       for (int i = 0; i < 5; i++) k[i] = d[i];
+      if (landscape) landKeysSet = false;
       showKeys(); saveSettings();
       Menu.setCurrent(optionsMenu, now); Menu.push(keysMenu, now);
       return;
@@ -552,14 +568,14 @@ final class Game extends GameCanvas implements Runnable {
         k[i] = c; ch = true;
       }
     }
-    if (ch) { showKeys(); saveSettings(); }
+    if (ch) { if (landscape) landKeysSet = true; showKeys(); saveSettings(); }
   }
 
   void showKeys() {
     if (keysMenu == null) return;
     int[] k = keymap();
     for (int i = 0; i < 5; i++) keysMenu.setCode(M_KEYS + i, k[i]);
-    keysMenu.text[0] = rotate ? "Key Setup (sideways)" : "Key Setup";
+    keysMenu.text[0] = !landscape ? "Keys: Portrait" : rotate ? "Keys: Landscape (sideways)" : "Keys: Landscape";
   }
 
   static String keyName(int code) {
@@ -952,7 +968,7 @@ final class Game extends GameCanvas implements Runnable {
       "Show FPS|Frames per second under the score.",
       "Landscape|The 320x240 layout. On an upright phone it is turned sideways.",
       "Show touch|On-screen buttons and a MENU box for touch screens.",
-      "Keyboard Setup|Pick the key for each action." }
+      "Keyboard Setup|Pick the key for each action. Portrait and Landscape keep their own keys: set them in each." }
   };
   boolean helpOpen; int helpPage;
 
@@ -1725,6 +1741,7 @@ final class Game extends GameCanvas implements Runnable {
   }
 
   void frame(long dt) {
+    if (layoutDirty) { layoutDirty = false; setLayout(landscape); }
     int ev = 0, e;
     nCodes = 0;
     while ((e = nextEvent()) != 0) {

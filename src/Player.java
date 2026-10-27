@@ -63,10 +63,21 @@ final class Player extends Body {
     return level.solid(x + w / 2, y) || level.solid(x + 1, y) || level.solid(x + w - 1, y);
   }
 
+  // A frame's movement in steps of at most 1.5 (0.1.3's frame ratio on a fast PC). One big step
+  // per frame made a slow phone's jumps lower (4 tiles became out of reach below ~25 fps) and
+  // carried Tux a long way past each ledge before he started to fall, so going down stairs he
+  // looked a step too high. previous_base stays the frame's start for stomping bad guys.
+  static final float MAX_STEP = 1.5f;
   void action(float fr) {
+    prevX = x; prevY = y; prevH = h;
+    int n = fr > MAX_STEP ? (int) Math.ceil(fr / MAX_STEP) : 1;
+    float f = fr / n;
+    for (int i = 0; i < n; i++) step(f);
+  }
+
+  private void step(float fr) {
     boolean jumpedInSolid = false;
     if (!inFire) holding = false;
-    prevX = x; prevY = y; prevH = h;
 
     if (dying == DYING_NOT) handleInput();
     applyPhysics(fr, level.gravity);
