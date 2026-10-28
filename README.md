@@ -6,6 +6,8 @@ Sony Ericsson Cedar - Full speed, no known issues. Virtually perfect.
 
 Nokia E71 - Runs at full speed unless Sound is on due to some issues with 369MHz Symbian 9.2 phones. Triggering sound effects results in lag spikes. Nokia sound mode should fix it.
 
+Sony Ericsson z780a - Runs well, though sound effects create very small lag spikes, like on the E71.
+
 Samsung OmniaPRO4 - Full speed. Perfect. Optimal.
 
 Nokia N82 - Nearly if not full speed on Low detail, pretty good on High detail, needs Nokia sound mode or turned off sound for optimal performance.
