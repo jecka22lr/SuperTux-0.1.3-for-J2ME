@@ -4,7 +4,11 @@ A rewrite of SuperTux 0.1.3 for J2ME devices. 240p, landscape or portrait. Not m
 # Benchmarks?
 Sony Ericsson Cedar - Full speed, no known issues. Virtually perfect.
 
-Nokia E71 - Runs at full speed unless Sound is on due to some issues with 369MHz Symbian 9.2 phones. Triggering sound effects results in lag spikes.
+Nokia E71 - Runs at full speed unless Sound is on due to some issues with 369MHz Symbian 9.2 phones. Triggering sound effects results in lag spikes. Nokia sound mode should fix it.
+
+Samsung OmniaPRO4 - Full speed. Perfect. Optimal.
+
+Nokia N82 - Nearly if not full speed on Low detail, pretty good on High detail, needs Nokia sound mode or turned off sound for optimal performance.
 
 LG t375 - 9-10 FPS on Landscape, 12 FPS on Portrait, 15 FPS with only Sound or Music turned on with strange audio effects if only Music is on.
 
