@@ -117,7 +117,7 @@ final class Game extends GameCanvas implements Runnable {
       M_STORY = 999, M_DETAIL = 15, M_FPSCAP = 16, M_RAM = 17, M_OPTHELP = 18, M_DRAWCAP = 19, M_ABOUT = 8, M_SFXFMT = 22, M_PAUSEMUS = 23, M_AUDIOINFO = 9,
       M_DBG_INV = 70, M_DBG_TIME = 71, M_DBG_TUX = 72, M_DBG_LIVES = 75, M_DBG_KILL = 76,
       M_DBG_END = 77, M_DBG_FINISH = 78, M_DBG_WALK = 79, M_DBG_SOLVE = 80, M_DBG_SOLVEALL = 81,
-      M_SFXVOL = 24, M_MUSVOL = 25, M_TOGGLERUN = 26;   // above any level number in a subset's level list
+      M_SFXVOL = 24, M_MUSVOL = 25, M_TOGGLERUN = 26, M_ANIMS = 27;   // above any level number in a subset's level list
   Menu mainMenu, optionsMenu, audioMenu, loadGameMenu, contribMenu, gameMenu, worldmapMenu, confirmMenu, keysMenu,
       contribSubsetMenu;
   String[] contribSubsets; int contribSubset;
@@ -153,6 +153,10 @@ final class Game extends GameCanvas implements Runnable {
   // buttons, no stretched copy of the background picture (Full keeps the picture, sky colour above
   // it), and the logo, story and score pictures are let go before each level loads
   boolean ramSaver;
+  // Max Potato jars: Options > Animations brings back what costs no memory (animated tiles, bouncing
+  // bricks, coins and fragments, floating scores, the walking title)
+  boolean anims;
+  boolean fx() { return detail < POTATO || anims; }
   Menu adventureMenu;
 
   void loadWorlds() {
@@ -232,7 +236,7 @@ final class Game extends GameCanvas implements Runnable {
         wantLandscape = b[0] != 0;
         music.enabled = b[1] != 0; music.midiOnly = b[1] == 2;
         if (b.length > 3) { sounds.mode = soundModeOf(b[2]); showFps = b[3] != 0; }
-        if (b.length > 4 && b[4] >= 2 && b[4] <= 10) {
+        if (b.length > 4 && b[4] >= 2 && b[4] <= 11) {
           java.io.DataInputStream in = new java.io.DataInputStream(new java.io.ByteArrayInputStream(b, 5, b.length - 5));
           for (int i = 0; i < 5; i++) keymapUp[i] = in.readInt();
           hsScore = in.readInt(); hsName = in.readUTF();
@@ -248,6 +252,7 @@ final class Game extends GameCanvas implements Runnable {
           if (b[4] >= 10) {
             sfxVol = Math.max(0, Math.min(3, in.readByte())); musicVol = Math.max(0, Math.min(3, in.readByte()));
             toggleRun = in.readBoolean();
+            if (b[4] >= 11) anims = in.readBoolean() && MAXPOTATO_ONLY;
           }
         }
       }
@@ -280,7 +285,7 @@ final class Game extends GameCanvas implements Runnable {
       java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
       java.io.DataOutputStream out = new java.io.DataOutputStream(bo);
       out.writeByte(wantLandscape ? 1 : 0); out.writeByte(!music.enabled ? 0 : music.midiOnly ? 2 : 1); out.writeByte(soundByte(sounds.mode));
-      out.writeByte(showFps ? 1 : 0); out.writeByte(10);
+      out.writeByte(showFps ? 1 : 0); out.writeByte(11);
       for (int i = 0; i < 5; i++) out.writeInt(keymapUp[i]);
       out.writeInt(hsScore); out.writeUTF(hsName);
       for (int i = 0; i < 5; i++) out.writeInt(keymapLand[i]);
@@ -291,6 +296,7 @@ final class Game extends GameCanvas implements Runnable {
       out.writeByte(sounds.format);
       out.writeBoolean(landKeysSet);
       out.writeByte(sfxVol); out.writeByte(musicVol); out.writeBoolean(toggleRun);
+      out.writeBoolean(anims);
       out.close();
       byte[] b = bo.toByteArray();
       RecordStore rs = RecordStore.openRecordStore("stux", true);
@@ -351,6 +357,7 @@ final class Game extends GameCanvas implements Runnable {
         .add(Menu.TOGGLE, "Landscape ", M_LANDSCAPE, null, wantLandscape)
         .add(Menu.TOGGLE, "Show touch", M_TOUCH, null, showTouch)
         .add(Menu.TOGGLE, "Toggle run", M_TOGGLERUN, null, toggleRun)
+        .add(Menu.TOGGLE, "Animations", M_ANIMS, null, anims)
         .add(Menu.GOTO, "Keyboard Setup", 0, keysMenu = new Menu(), false)
         .add(Menu.GOTO, "Option Help", M_OPTHELP, null, false)    // no target: opens the help pages
         .add(Menu.HL, "", 0).add(Menu.BACK, "Back", 0);
@@ -360,6 +367,7 @@ final class Game extends GameCanvas implements Runnable {
     audioMenu.setList(M_MUSVOL, Sound.VOLUMES, musicVol);
     if (MAXPOTATO_ONLY) optionsMenu.remove(M_DETAIL);
     if (PAGED) optionsMenu.remove(M_RAM);
+    if (!MAXPOTATO_ONLY) optionsMenu.remove(M_ANIMS);
     optionsMenu.setList(M_DETAIL, DETAIL_MODES, detail);
     optionsMenu.setList(M_FPSCAP, FPSCAP_MODES, fpsCap);
     optionsMenu.setList(M_DRAWCAP, DRAWCAP_MODES, drawCap);
@@ -702,6 +710,7 @@ final class Game extends GameCanvas implements Runnable {
     }
 
     showFps = optionsMenu.isToggled(M_FPS);
+    if (MAXPOTATO_ONLY && anims != optionsMenu.isToggled(M_ANIMS)) { anims = !anims; tcLevel = null; saveSettings(); }   // the tile cache is drawn differently
     if (toggleRun != optionsMenu.isToggled(M_TOGGLERUN)) { toggleRun = !toggleRun; runLatched = false; saveSettings(); }
     if (showTouch != optionsMenu.isToggled(M_TOUCH)) { showTouch = !showTouch; setLayout(wantLandscape); }
     if (wantLandscape != optionsMenu.isToggled(M_LANDSCAPE)) setLayout(!wantLandscape);
@@ -722,7 +731,7 @@ final class Game extends GameCanvas implements Runnable {
 
   // draw_demo: Tux walks right, jumping on a random timer, at half speed
   void demoFrame(long dt) {
-    if (detail == MAXPOTATO) {         // Max Potato: a still title screen (the music still plays)
+    if (detail == MAXPOTATO && !anims) {   // Max Potato: a still title screen (the music still plays)
       if (music.type != Music.LEVEL) music.play(Music.LEVEL);
       return;
     }
@@ -1031,6 +1040,7 @@ final class Game extends GameCanvas implements Runnable {
       "Landscape|The 320x240 layout. On an upright phone it is turned sideways. A phone turned sideways (or a landscape screen) uses it either way.",
       "Show touch|On-screen buttons and a MENU box for touch screens.",
       "Toggle run|Off: hold the run key to run. On: press it once to run, again to walk (each press also throws a fireball).",
+      "Animations|Max Potato jars only: animated tiles, bouncing bricks and coins, floating scores and the walking title come back. A little slower, no extra memory.",
       "Keyboard Setup|Pick the key for each action. Portrait and Landscape keep their own keys: set them in each. The last key the phone sent shows at the bottom." }
   };
   boolean helpOpen; int helpPage;
@@ -1820,7 +1830,7 @@ final class Game extends GameCanvas implements Runnable {
       Menu mc = Menu.current;
       boolean sliding = mc != null && !Menu.noEffects && mc.effectEnd > System.currentTimeMillis() - 100;
       if (!sliding && (helpOpen || ((state == PLAY || state == WORLDMAP) && mc != null)
-          || (state == TITLE && detail == MAXPOTATO) || state == CONTROLS || state == ABOUT || state == AUDIOINFO)) frameMs = Math.max(frameMs, 100);   // still screens too
+          || (state == TITLE && detail == MAXPOTATO && !anims) || state == CONTROLS || state == ABOUT || state == AUDIOINFO)) frameMs = Math.max(frameMs, 100);   // still screens too
       if (spent < frameMs) { try { Thread.sleep(frameMs - spent); } catch (InterruptedException e) { } }
       else Thread.yield();             // a slow phone that never sleeps still lets key and touch events in
     }
@@ -2005,8 +2015,10 @@ final class Game extends GameCanvas implements Runnable {
           int ly = landscape ? 30 : 50;
           Res.textCentered(g, Res.GOLD, "SuperTux 0.1.3", sw / 2, ly, 0);
           Res.textCentered(g, Res.GOLD, "Max Potato mode ON", sw / 2, ly + 16, 0);
-          Res.textCentered(g, Res.WHITE, "The title stands still", sw / 2, ly + 32, 0);
-          Res.textCentered(g, Res.WHITE, "on purpose", sw / 2, ly + 42, 0);
+          if (!anims) {
+            Res.textCentered(g, Res.WHITE, "The title stands still", sw / 2, ly + 32, 0);
+            Res.textCentered(g, Res.WHITE, "on purpose", sw / 2, ly + 42, 0);
+          }
         } else if (detail == POTATO) drawLogoStrip(g);
         else g.drawImage(logo(), landscape ? 80 : 40, landscape ? 8 : 24, Graphics.TOP | Graphics.LEFT);
         if (detail < POTATO) {         // Potato and Max Potato: on the About screen instead
@@ -2098,7 +2110,7 @@ final class Game extends GameCanvas implements Runnable {
       int bot = top + (Level.H << 4);
       fillSky(g, 0, bot, sw, sh - bot, bot);
       drawCached(g, sx0, top, sky);
-      if (detail == LOW) drawAnimated(g, col0, col1, ox, top);
+      if (detail == LOW || anims) drawAnimated(g, col0, col1, ox, top);   // Max Potato with Animations too
     } else {
       background(g, scrollX);
       if (detail == FULL) particles(g, 0);
@@ -2109,15 +2121,15 @@ final class Game extends GameCanvas implements Runnable {
       drawLayer(g, level.ia, col0, col1, ox, top, true);
       g.setClip(0, 0, sw, sh);
     }
-    if (detail < POTATO) for (int i = 0; i < NE; i++) if (bbOn[i])
+    if (fx()) for (int i = 0; i < NE; i++) if (bbOn[i])
       Res.drawTile(g, bbTile[i], ((int) bbX[i] - sx0) >> 1, ((int) (bbY[i] + bbOff[i]) + viewTop) >> 1, frameCounter);
     for (int i = 0; i < badguys.size(); i++) ((BadGuy) badguys.elementAt(i)).draw(g);
     tux.draw(g);
     for (int i = 0; i < bullets.size(); i++) ((Bullet) bullets.elementAt(i)).draw(g);
-    if (detail < POTATO) for (int i = 0; i < NE; i++) if (fsEnd[i] != 0)
+    if (fx()) for (int i = 0; i < NE; i++) if (fsEnd[i] != 0)
       Res.text(g, Res.GOLD, fsText[i], ((int) fsX[i] >> 1) + 8 - fsText[i].length() * 4, ((int) fsY[i] + viewTop) >> 1);
     for (int i = 0; i < items.size(); i++) ((Item) items.elementAt(i)).draw(g);
-    if (detail < POTATO) for (int i = 0; i < NE; i++) {
+    if (fx()) for (int i = 0; i < NE; i++) {
       if (bdOn[i] && coinTile >= 0)
         Res.drawTile(g, coinTile, ((int) bdX[i] - sx0) >> 1, ((int) bdY[i] + viewTop) >> 1, 0);
       if (pbEnd[i] != 0) {
@@ -2291,7 +2303,7 @@ final class Game extends GameCanvas implements Runnable {
           int t = map[row + cx] & 0xff;
           if (t == 0) continue;
           // Low: animated tiles are drawn each frame instead, and a bouncing brick is drawn moving
-          if (detail == LOW && (Res.tFrames[t].length > 1 || (l == 1 && bouncing(cx, y)))) continue;
+          if ((detail == LOW || anims) && (Res.tFrames[t].length > 1 || (l == 1 && bouncing(cx, y)))) continue;
           if (cx < c) {
             short[] fr = Res.tFrames[t];
             if (fr.length == 0 || ((cx - c) << 4) + (Res.tfw[fr[0]] & 0xff) <= 0) continue;
@@ -2389,8 +2401,8 @@ final class Game extends GameCanvas implements Runnable {
       for (int x = col0; x <= col1; x++) {
         int t = map[row + x] & 0xff;
         if (t == 0) continue;
-        if (ia && detail < POTATO && bouncing(x, y)) continue;
-        Res.drawTile(g, t, ox + (x << 4), top + (y << 4), detail >= POTATO ? 0 : frameCounter);
+        if (ia && fx() && bouncing(x, y)) continue;
+        Res.drawTile(g, t, ox + (x << 4), top + (y << 4), fx() ? frameCounter : 0);
       }
     }
   }
