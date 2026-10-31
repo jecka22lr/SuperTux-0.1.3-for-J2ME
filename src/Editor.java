@@ -215,6 +215,7 @@ final class Editor {
     try {
       lv = Level.load(levelId(subset, n));
     } catch (Exception e) { lv = new Level(); }
+    if (Res.paged) { Res.ghostFailed = false; Res.needTiles(lv, game.coinTile); }   // the old level's pages go
     levelNo = n;
     bad.removeAllElements();
     for (int i = 0; i < lv.objKind.length; i++) bad.addElement(new int[] { lv.objKind[i], lv.objX[i] & 0xffff, lv.objY[i], lv.objStay[i] });
@@ -561,9 +562,9 @@ final class Editor {
       if (settingsMenu.check() == M_APPLY) { applySettings(); Menu.setCurrent(null, now); }
     } else if (m == groupMenu) {
       int i = groupMenu.check();
-      if (i >= 1) { curGroup = i - 1; curObjects = false; Menu.setCurrent(null, now); }
+      if (i >= 1) { curGroup = i - 1; curObjects = false; Menu.setCurrent(null, now); dropPalette(); }
     } else if (m == objectsMenu) {
-      if (objectsMenu.check() == 1) { curObjects = true; curGroup = -1; Menu.setCurrent(null, now); }
+      if (objectsMenu.check() == 1) { curObjects = true; curGroup = -1; Menu.setCurrent(null, now); dropPalette(); }
     } else if (m == propsMenu) {
       if (propsMenu.check() == M_OK && selected >= 0) {
         int[] b = (int[]) bad.elementAt(selected);
@@ -672,6 +673,22 @@ final class Editor {
   }
 
   // ---------------- drawing ----------------
+  // paged jar (2 MB phones): the last tile group's pages go when another group or the objects open;
+  // what the level and the tile in hand use stays or comes back as it's drawn
+  void dropPalette() { if (Res.paged) Res.needTiles(lv, game.coinTile); }
+
+  // a level tile, see-through when its layer isn't the one being edited
+  void tile(Graphics g, int t, int x, int y, boolean see) {
+    if (Res.paged) Res.drawTileGhost(g, t, x, y, game.frameCounter, see);
+    else Res.drawTileImg(g, see && ghost != null ? ghost : Res.tileImg, t, x, y, game.frameCounter);
+  }
+
+  void cursor(Graphics g, int s, int w, int x, int y) {
+    int f = Res.sFrames[s][0];
+    javax.microedition.lcdui.Image img = Res.spriteImage(f);
+    if (img != null) g.drawRegion(img, Res.sfx[f], Res.sfy[f], w, w, 0, x, y, Graphics.TOP | Graphics.LEFT);
+  }
+
   static int badSprite(int k) {
     switch (k) {
       case BadGuy.MRICEBLOCK: return Spr.MRICEBLOCK_LEFT;
@@ -709,10 +726,8 @@ final class Editor {
     }
     // the pointer
     g.setClip(0, 0, sw, sh);
-    if (selectObject) g.drawRegion(Res.sprImg, Res.sfx[Res.sFrames[Spr.IC_SELECT_CURSOR][0]], Res.sfy[Res.sFrames[Spr.IC_SELECT_CURSOR][0]],
-        32, 32, 0, vmX - 16, vmY - 16, Graphics.TOP | Graphics.LEFT);
-    else if (m == null) g.drawRegion(Res.sprImg, Res.sfx[Res.sFrames[Spr.IC_MOUSECURSOR][0]], Res.sfy[Res.sFrames[Spr.IC_MOUSECURSOR][0]],
-        16, 16, 0, vmX, vmY, Graphics.TOP | Graphics.LEFT);
+    if (selectObject) cursor(g, Spr.IC_SELECT_CURSOR, 32, vmX - 16, vmY - 16);
+    else if (m == null) cursor(g, Spr.IC_MOUSECURSOR, 16, vmX, vmY);
   }
 
   void drawLevel(Graphics g) {
@@ -734,7 +749,7 @@ final class Editor {
         g.fillRect(0, y, p, 4);
       }
     }
-    if (!ghostTried) {
+    if (!ghostTried && !Res.paged) {     // the paged jar makes these a page at a time (Res.ghostImage)
       ghostTried = true;
       try {
         int w = Res.tileImg.getWidth(), h = Res.tileImg.getHeight();
@@ -746,7 +761,7 @@ final class Editor {
     }
     // the current tile, see-through, under the cursor
     if (curIsTile && !selectObject && curTile != 0)
-      Res.drawTileImg(g, ghost != null ? ghost : Res.tileImg, curTile, (cursorX - posX) / 2, cursorY / 2, game.frameCounter);
+      tile(g, curTile, (cursorX - posX) / 2, cursorY / 2, true);
     int col0 = posX / 32, cols = p / 16 + 2;
     for (int y = 0; y < 15; y++)
       for (int x = Math.max(0, col0 - 8); x < col0 + cols && x < lv.width; x++) {   // wide pictures from the left too
@@ -755,13 +770,13 @@ final class Editor {
           int t = (l == 0 ? lv.bg : l == 1 ? lv.ia : lv.fg)[i] & 0xff;
           if (t == 0) continue;
           if (x < col0 && (Res.tFrames[t].length == 0 || sx + (Res.tfw[Res.tFrames[t][0]] & 0xff) <= 0)) continue;
-          Res.drawTileImg(g, l == activeTm || ghost == null ? Res.tileImg : ghost, t, sx, sy, game.frameCounter);
+          tile(g, t, sx, sy, l != activeTm);
         }
         if (x < col0) continue;
         int t = lv.ia[i] & 0xff;
         if (t < editorFrame.length && editorFrame[t] >= 0) {
           int f = editorFrame[t];
-          g.drawRegion(Res.tileImg, Res.tfx[f], Res.tfy[f], Res.tfw[f] & 0xff, Res.tfh[f] & 0xff, 0, sx, sy, Graphics.TOP | Graphics.LEFT);
+          Res.drawFrame(g, f, sx, sy);
         }
       }
     for (int i = 0; i < bad.size(); i++) {
@@ -831,7 +846,7 @@ final class Editor {
         Res.drawTile(g, curTile, tx, ty, game.frameCounter);
         if (curTile < editorFrame.length && editorFrame[curTile] >= 0) {
           int f = editorFrame[curTile];
-          g.drawRegion(Res.tileImg, Res.tfx[f], Res.tfy[f], Res.tfw[f] & 0xff, Res.tfh[f] & 0xff, 0, tx, ty, Graphics.TOP | Graphics.LEFT);
+          Res.drawFrame(g, f, tx, ty);
         }
         g.setClip(0, 0, sw, sh);
       }
@@ -867,7 +882,7 @@ final class Editor {
       Res.drawTile(g, t, r[0], r[1], 0);
       if (t < editorFrame.length && editorFrame[t] >= 0) {
         int f = editorFrame[t];
-        g.drawRegion(Res.tileImg, Res.tfx[f], Res.tfy[f], Res.tfw[f] & 0xff, Res.tfh[f] & 0xff, 0, r[0], r[1], Graphics.TOP | Graphics.LEFT);
+        Res.drawFrame(g, f, r[0], r[1]);
       }
       g.setClip(0, 0, game.sw, game.sh);
     } else if (icon == -1) {
@@ -929,7 +944,9 @@ final class Editor {
     if (fr.length > 0) {
       int f = fr[0], w = Res.tfw[f] & 0xff, h = Res.tfh[f] & 0xff;
       int[] px = new int[w * h];
-      Res.tileImg.getRGB(px, 0, w, Res.tfx[f], Res.tfy[f], w, h);
+      javax.microedition.lcdui.Image src = Res.tileImage(f);
+      if (src == null) return 0xff808080;           // (not kept: tried again next time)
+      src.getRGB(px, 0, w, Res.tfx[f], Res.tfy[f], w, h);
       long r = 0, gg = 0, b = 0; int n = 0;
       for (int i = 0; i < px.length; i++) if ((px[i] >>> 24) > 128) { r += (px[i] >> 16) & 255; gg += (px[i] >> 8) & 255; b += px[i] & 255; n++; }
       if (n > 0) c = 0xff000000 | (int) (r / n) << 16 | (int) (gg / n) << 8 | (int) (b / n);

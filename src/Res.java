@@ -45,8 +45,12 @@ final class Res {
 
   // Max Potato jar (2 MB heap phones): the sheets come in small pages (tools/pages.py) and only the
   // pages the level or the world map uses are kept. tfx/tfy and sfx/sfy are then page positions.
+  // needTiles / needSprites load ahead and let go of the rest; anything drawn from a page that isn't
+  // in memory loads it there and then (the level editor relies on that for its tile palette).
   static boolean paged;
   static Image[] tPage, sPage;
+  static Image[] gPage;                // editor: tile pages at half alpha (layers not being edited)
+  static boolean ghostFailed;          // out of memory for those: the editor draws its layers solid
   static byte[] tfp, sfp;              // a frame's page (0xff: none)
   static boolean[] tWant, sWant;
   static int spriteSet = -1;
@@ -67,13 +71,29 @@ final class Res {
   // drop the pages not wanted, then load the missing ones (one lot of memory at a time)
   private static void fetch(Image[] page, boolean[] want, String dir) {
     boolean freed = false;
-    for (int i = 0; i < page.length; i++) if (!want[i] && page[i] != null) { page[i] = null; freed = true; }
+    for (int i = 0; i < page.length; i++)
+      if (!want[i] && page[i] != null) { page[i] = null; if (page == tPage) gPage[i] = null; freed = true; }
     if (freed) System.gc();
     for (int i = 0; i < page.length; i++)
-      if (want[i] && page[i] == null) {
-        try { page[i] = Image.createImage(dir + i + ".png"); }
-        catch (Throwable e) { page[i] = null; System.gc(); }
-      }
+      if (want[i] && page[i] == null) page[i] = loadPage(page, dir, i);
+  }
+
+  // one page; out of memory: let go of every other page (they come back as they're drawn) and retry
+  private static Image loadPage(Image[] page, String dir, int i) {
+    for (int k = 0; k < 2; k++) {
+      try { return Image.createImage(dir + i + ".png"); }
+      catch (OutOfMemoryError e) {
+        if (k == 1) break;
+        dropGhosts();
+        for (int j = 0; j < page.length; j++) page[j] = null;
+        System.gc();
+      } catch (Throwable e) { break; }
+    }
+    return null;
+  }
+
+  static void dropGhosts() {
+    if (gPage != null) for (int j = 0; j < gPage.length; j++) gPage[j] = null;
   }
 
   // the tile pages a level can show: its tiles, what they turn into (bricks, bonus blocks) and the coin
@@ -96,14 +116,16 @@ final class Res {
     fetch(tPage, tWant, "/tp/");
   }
 
-  // sprite pages: 0 levels, menus and the title; 1 the world map
+  // sprite pages: 0 levels, menus and the title; 1 the world map; 2 the level editor (its icons; the
+  // enemies it shows load as they're drawn)
   static void needSprites(int set) {
     if (!paged || set == spriteSet) return;
     spriteSet = set;
     for (int i = 0; i < sWant.length; i++) sWant[i] = false;
     for (int s = 0; s < sFrames.length; s++) {
       boolean ui = s >= Spr.ONEUP && s < Spr.IC_UP || s == Spr.IC_LEFT || s == Spr.IC_RIGHT;
-      if (set == 0 ? ui || s < Spr.ONEUP : ui || s >= Spr.WM_TILES) {
+      boolean ed = s >= Spr.IC_UP && s < Spr.WM_TILES || s == Spr.LARGETUX_WALK_RIGHT;
+      if (set == 0 ? ui || s < Spr.ONEUP : set == 1 ? ui || s >= Spr.WM_TILES : ui || ed) {
         short[] fr = sFrames[s];
         for (int j = 0; j < fr.length; j++) { int p = sfp[fr[j]] & 0xff; if (p < sWant.length) sWant[p] = true; }
       }
@@ -114,13 +136,52 @@ final class Res {
   static Image tileImage(int f) {
     if (!paged) return tileImg;
     int p = tfp[f] & 0xff;
-    return p < tPage.length ? tPage[p] : null;
+    if (p >= tPage.length) return null;
+    if (tPage[p] == null) tPage[p] = loadPage(tPage, "/tp/", p);
+    return tPage[p];
   }
 
   static Image spriteImage(int f) {
     if (!paged) return sprImg;
     int p = sfp[f] & 0xff;
-    return p < sPage.length ? sPage[p] : null;
+    if (p >= sPage.length) return null;
+    if (sPage[p] == null) sPage[p] = loadPage(sPage, "/sp/", p);
+    return sPage[p];
+  }
+
+  // a tile frame's page at half alpha, made from the page when first needed (null: no memory for it)
+  static Image ghostImage(int f) {
+    int p = tfp[f] & 0xff;
+    if (p >= tPage.length || ghostFailed) return null;
+    if (gPage[p] == null) {
+      Image src = tileImage(f);
+      if (src == null) return null;
+      try {
+        int w = src.getWidth(), h = src.getHeight();
+        int[] px = new int[w * h];
+        src.getRGB(px, 0, w, 0, 0, w, h);
+        for (int i = 0; i < px.length; i++) px[i] = ((px[i] >>> 25) << 24) | (px[i] & 0xffffff);
+        gPage[p] = Image.createRGBImage(px, w, h, true);
+      } catch (Throwable e) { dropGhosts(); ghostFailed = true; System.gc(); return null; }
+    }
+    return gPage[p];
+  }
+
+  // a tile (compact index), see-through or not: the editor on the paged jar
+  static void drawTileGhost(Graphics g, int t, int x, int y, int tick, boolean see) {
+    short[] fr = tFrames[t];
+    if (fr.length == 0) return;
+    int f = fr.length == 1 ? fr[0] : fr[((tick * 25) / tAnim[t]) % fr.length];
+    Image img = see ? ghostImage(f) : null;
+    if (img == null) img = tileImage(f);
+    if (img == null) return;
+    g.drawRegion(img, tfx[f], tfy[f], tfw[f] & 0xff, tfh[f] & 0xff, 0, x, y, Graphics.TOP | Graphics.LEFT);
+  }
+
+  // one tile frame at x, y (editor overlays)
+  static void drawFrame(Graphics g, int f, int x, int y) {
+    Image img = tileImage(f);
+    if (img != null) g.drawRegion(img, tfx[f], tfy[f], tfw[f] & 0xff, tfh[f] & 0xff, 0, x, y, Graphics.TOP | Graphics.LEFT);
   }
 
   static void load() throws IOException {
@@ -172,7 +233,7 @@ final class Res {
       tfp = readPages("/tp.bin", tfx, tfy); sfp = readPages("/sp.bin", sfx, sfy);
       in = open("/tp.bin"); tPage = new Image[in.readUnsignedByte()]; in.close();
       in = open("/sp.bin"); sPage = new Image[in.readUnsignedByte()]; in.close();
-      tWant = new boolean[tPage.length]; sWant = new boolean[sPage.length];
+      tWant = new boolean[tPage.length]; sWant = new boolean[sPage.length]; gPage = new Image[tPage.length];
     }
   }
 

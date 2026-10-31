@@ -509,8 +509,7 @@ final class Game extends GameCanvas implements Runnable {
         .add(Menu.GOTO, "Bonus Levels", M_CONTRIB, contribMenu, false)
         .add(Menu.GOTO, "Options", M_OPTIONS, optionsMenu, false)
         .add(Menu.ACTION, "Controls", M_CONTROLS)
-        ;
-    if (!PAGED) mainMenu.add(Menu.ACTION, "Level Editor", M_EDITOR);   // the paged jar has no full tile sheet
+        .add(Menu.ACTION, "Level Editor", M_EDITOR);
     if (detail >= POTATO) mainMenu.add(Menu.ACTION, "About", M_ABOUT);
     if (getClass().getResourceAsStream("/a16/0.wav") != null) mainMenu.add(Menu.ACTION, "Audio info", M_AUDIOINFO);   // test builds
     mainMenu.add(Menu.ACTION, "Credits", M_CREDITS)
@@ -1966,7 +1965,7 @@ final class Game extends GameCanvas implements Runnable {
   }
 
   void draw(Graphics g) {
-    Res.needSprites(state == WORLDMAP ? 1 : 0);
+    Res.needSprites(state == WORLDMAP ? 1 : state == EDITOR ? 2 : 0);
     g.setClip(0, 0, sw, sh);
     if (helpOpen) { drawHelp(g); return; }
     if (state == ERROR) {
