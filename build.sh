@@ -102,5 +102,33 @@ if [ -f res-atnw-only.txt ]; then
   python3 tools/repack.py dist/SuperTux-ATTNW.jar
   SIZE=$(stat -c %s dist/SuperTux-ATTNW.jar)
   { cat build/atnw.mf; echo "MIDlet-Jar-URL: SuperTux-ATTNW.jar"; echo "MIDlet-Jar-Size: $SIZE"; } > dist/SuperTux-ATTNW.jad
+  # ATTNW for 2 MB phones: the ATTNW jar made like the Max Potato 2 MB one (MIDI only, no pictures
+  # Max Potato doesn't use, tiles in 32x32 pages, sprites in 64x64 to stay under 1 MB). Not for GitHub,
+  # like the ATTNW jar.
+  rm -rf build/mpa && cp -r build/atnw build/mpa && cd build/mpa && rm -f m/*.mp3 b/*.png lo.png s.png && rm -rf a16 a8 aa au && \
+    echo maxpotato > x/maxpotato && cd ../.. && python3 tools/pages.py build/mpa tiles && \
+    PW=64 PH=64 python3 tools/pages.py build/mpa sprites && \
+    sed 's/^MIDlet-Description: .*/MIDlet-Description: Adventure To The New World (ATTNW) by Miksy91, on SuperTux 0.1.3 J2ME - Max Potato for 2 MB phones/' \
+      build/atnw.mf > build/mpa.mf && \
+    (cd build/mpa && $J/bin/jar cfm ../../dist/SuperTux-ATTNW-MaxPotato-2MB.jar ../mpa.mf $(ls | grep -v META-INF) 2>&1 | grep -v JAVA_TOOL_OPTIONS || true)
+  python3 tools/repack.py dist/SuperTux-ATTNW-MaxPotato-2MB.jar
+  SIZE=$(stat -c %s dist/SuperTux-ATTNW-MaxPotato-2MB.jar)
+  if [ "$SIZE" -ge 1000000 ]; then echo "ATTNW 2 MB jar is $SIZE bytes: over the 1 MB limit"; exit 1; fi
+  { cat build/mpa.mf; echo "MIDlet-Jar-URL: SuperTux-ATTNW-MaxPotato-2MB.jar"; echo "MIDlet-Jar-Size: $SIZE"; } > dist/SuperTux-ATTNW-MaxPotato-2MB.jad
+fi
+# the Editions: own file and MIDlet names, so they install side by side (each with its own saves)
+D="SuperTux 0.1.3 J2ME - Beta Release 1.2"
+A="Adventure To The New World (ATTNW) by Miksy91, on SuperTux 0.1.3 J2ME - Beta Release 1.2"
+E() { python3 tools/edition.py dist "$@"; }
+E SuperTux-lite.jar SuperTux-Lite "SuperTux L" "$D, Lite Edition (under 1 MB, MIDI)"
+E SuperTux-MaxPotato-2MB.jar SuperTux-Minimal "SuperTux M" "$D, Minimal Edition (Max Potato, 2 MB phones)"
+rm -f dist/SuperTux-MaxPotato.jar dist/SuperTux-MaxPotato.jad   # (the Minimal Edition's base, not released)
+if [ -f dist/SuperTux-noattnw.jar ]; then
+  E SuperTux-noattnw.jar SuperTux-Normal "SuperTux N" "$D, Normal Edition"
+  E SuperTux-ATTNW.jar SuperTux-Full-ATTNW "SuperTux ATTNW F" "$A, Full Edition"
+  E SuperTux-ATTNW-MaxPotato-2MB.jar SuperTux-Minimal-ATTNW "SuperTux ATTNW M" "$A, Minimal Edition (Max Potato, 2 MB phones)"
+  E SuperTux.jar SuperTux-Full "SuperTux F" "$D, Full Edition (with ATTNW)"
+else
+  E SuperTux.jar SuperTux-Normal "SuperTux N" "$D, Normal Edition"   # built without the ATTNW mod
 fi
 ls -la dist

@@ -57,8 +57,10 @@ public class PageCmp {
       }
     for (int map = 0; map < 12; map++) {
       try {
+        g.worldmap = null; g.state = Game.TITLE;
         g.setLayout(map % 2 == 0); g.loadingMap = map; g.loadingSave = "pc"; g.openWorldMap(); Menu.setCurrent(null, 0);
-      } catch (Throwable e) { break; }
+      } catch (Throwable e) { continue; }
+      if (g.worldmap == null || g.state != Game.WORLDMAP) continue;   // (a jar without this map)
       WorldMap w = g.worldmap;
       BufferedImage im = new BufferedImage(g.sw, g.sh, BufferedImage.TYPE_INT_RGB);
       Graphics r = new Graphics(im.createGraphics());
