@@ -269,7 +269,8 @@ final class Game extends GameCanvas implements Runnable {
   int sfxVol = 3, musicVol = 3;
   boolean toggleRun;
   // the Max Potato jar for weak phones: no pictures but the hard-edged sprites, Detail fixed
-  static final boolean PAGED = Game.class.getResourceAsStream("/tp.bin") != null;
+  // the 2 MB jar (sprites in pages too; the lite jar has only its tiles in pages)
+  static final boolean PAGED = Game.class.getResourceAsStream("/sp.bin") != null;
   static final boolean MAXPOTATO_ONLY = Game.class.getResourceAsStream("/x/maxpotato") != null;
 
   // settings byte 2: 0 off, 1 normal (what older versions saved for off / on), 2 fast, 3 MIDI, 4 Nokia, 5 tones
@@ -705,6 +706,8 @@ final class Game extends GameCanvas implements Runnable {
     if (!PAGED && ramSaver != optionsMenu.isToggled(M_RAM)) {
       ramSaver = !ramSaver;
       if (ramSaver) { tc = null; tcG = null; tcLevel = null; touchImg = null; hudImg = null; }
+      Res.keepTiles = !ramSaver;
+      if (ramSaver && level != null) Res.needTiles(level, coinTile);   // lite jar: the other tile pages go now
       loadBackground();
     }
 
@@ -1032,7 +1035,7 @@ final class Game extends GameCanvas implements Runnable {
       "FPS cap|How often the game runs, up to 33 times a second. Lower gives the phone spare time, which can smooth out sound and music.",
       "Draw cap|How often the screen is drawn. Lower is choppier but the game keeps its speed, and drawing is most of the work." },
     { "RAM saver",
-      "On|Uses less memory and looks the same, but runs a bit slower. For phones that crash or lose sounds when memory runs out.",
+      "On|Uses less memory and looks the same, but runs a bit slower. For phones that crash or lose sounds when memory runs out. The lite and Max Potato jars also keep only the tiles the level uses.",
       "Off|Keeps pictures ready in memory for speed." },
     { "Other options",
       "Show FPS|Frames per second under the score.",
@@ -1129,7 +1132,7 @@ final class Game extends GameCanvas implements Runnable {
     }
     try {
       level = testLevel != null ? new Level(testLevel) : Level.load(levelId);
-      Res.needTiles(level, coinTile);
+      Res.keepTiles = !ramSaver; Res.needTiles(level, coinTile);
     } catch (Exception e) {
       state = ERROR; message = "Level " + levelId + ": " + e; return;
     }

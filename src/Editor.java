@@ -215,7 +215,7 @@ final class Editor {
     try {
       lv = Level.load(levelId(subset, n));
     } catch (Exception e) { lv = new Level(); }
-    if (Res.paged) { Res.ghostFailed = false; Res.needTiles(lv, game.coinTile); }   // the old level's pages go
+    if (Res.paged) { Res.ghostFailed = false; Res.keepTiles = !game.ramSaver; Res.needTiles(lv, game.coinTile); }   // the old level's pages go
     levelNo = n;
     bad.removeAllElements();
     for (int i = 0; i < lv.objKind.length; i++) bad.addElement(new int[] { lv.objKind[i], lv.objX[i] & 0xffff, lv.objY[i], lv.objStay[i] });
@@ -673,9 +673,9 @@ final class Editor {
   }
 
   // ---------------- drawing ----------------
-  // paged jar (2 MB phones): the last tile group's pages go when another group or the objects open;
-  // what the level and the tile in hand use stays or comes back as it's drawn
-  void dropPalette() { if (Res.paged) Res.needTiles(lv, game.coinTile); }
+  // tile pages (2 MB jar, lite jar with RAM saver): the last tile group's pages go when another group
+  // or the objects open; what the level and the tile in hand use stays or comes back as it's drawn
+  void dropPalette() { if (Res.paged) { Res.keepTiles = !game.ramSaver; Res.needTiles(lv, game.coinTile); } }
 
   // a level tile, see-through when its layer isn't the one being edited
   void tile(Graphics g, int t, int x, int y, boolean see) {

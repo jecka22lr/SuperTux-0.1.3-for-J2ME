@@ -53,6 +53,7 @@ stock_tiles() {
 mkdir -p build/lite && cd build/lite && unzip -q -o ../../dist/SuperTux.jar && rm -f m/*.mp3 && \
   { [ ! -f ../../res-atnw-only.txt ] || xargs rm -f < ../../res-atnw-only.txt; } && \
   mv x/g-lite.txt x/g.txt && rm -f x/g-atnw.txt && rm -rf a16 a8 aa au && stock_tiles && \
+  cp t.png ../lite-t.png && PW=64 PH=64 python3 ../../tools/pages.py . tiles && \
   $J/bin/jar cfm ../../dist/SuperTux-lite.jar META-INF/MANIFEST.MF $(ls | grep -v META-INF) 2>&1 | grep -v JAVA_TOOL_OPTIONS || true
 cd ../..
 python3 tools/repack.py dist/SuperTux-lite.jar
@@ -71,7 +72,8 @@ SIZE=$(stat -c %s dist/SuperTux-MaxPotato.jar)
 { cat build/mp.mf; echo "MIDlet-Jar-URL: SuperTux-MaxPotato.jar"; echo "MIDlet-Jar-Size: $SIZE"; } > dist/SuperTux-MaxPotato.jad
 # Max Potato for 2 MB heaps (Nokia 6600 fold): the same jar with the tile and sprite sheets cut into
 # small pages (tools/pages.py), so only what the level or the world map shows is in memory
-rm -rf build/mpl && cp -r build/mp build/mpl && python3 tools/pages.py build/mpl && \
+rm -rf build/mpl && cp -r build/mp build/mpl && rm -rf build/mpl/tp build/mpl/tp.bin && cp build/lite-t.png build/mpl/t.png && \
+  python3 tools/pages.py build/mpl tiles sprites && \
   sed 's/^MIDlet-Description: .*/MIDlet-Description: SuperTux 0.1.3 J2ME - Beta Release 1.2, Max Potato for 2 MB phones/' build/MANIFEST.MF > build/mpl.mf && \
   (cd build/mpl && $J/bin/jar cfm ../../dist/SuperTux-MaxPotato-2MB.jar ../mpl.mf $(ls | grep -v META-INF) 2>&1 | grep -v JAVA_TOOL_OPTIONS || true)
 python3 tools/repack.py dist/SuperTux-MaxPotato-2MB.jar

@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
-"""Max Potato jar for phones with a 2 MB heap (Nokia 6600 fold): cuts the tile sheet (t.png) and the
-sprite sheet (s2.png) into small pages, so the game keeps only the pages the current level or the
-world map uses (Res.need). Writes tp/<n>.png + tp.bin and sp/<n>.png + sp.bin, removes t.png and s2.png.
+"""Cuts the tile sheet (t.png) and/or the Max Potato sprite sheet (s2.png) into pages, so the game can
+keep only the pages the current level or the world map uses (Res.needTiles / needSprites).
+Writes tp/<n>.png + tp.bin (tiles) and sp/<n>.png + sp.bin (sprites) and removes the sheets.
+The 2 MB jar pages both at 32x32 (memory); the lite jar pages only the tiles, at 64x64 (jar size,
+for RAM saver). Page size from PW / PH in the environment.
 Page file: u8 pages, per page u8 w, u8 h; u16 frames, per frame u8 page (255: none), u8 x, u8 y.
-usage: pages.py <extracted jar dir> [report]"""
+usage: pages.py <extracted jar dir> [tiles] [sprites] [report]   (neither: both)"""
 import sys, os, struct, glob, subprocess
 from PIL import Image
 
 D = sys.argv[1]
+ARGS = sys.argv[2:]
+DO_T = 'tiles' in ARGS or not ('sprites' in ARGS)
+DO_S = 'sprites' in ARGS or not ('tiles' in ARGS)
 PW, PH = int(os.environ.get("PW", 32)), int(os.environ.get("PH", 32))         # a page: 32x32 = 4 KB decoded at 4 bytes a pixel
 
 
@@ -107,20 +112,23 @@ def write(prefix, place, imgs):
 
 
 rects, tiles = read_t(open(os.path.join(D, 't.bin'), 'rb').read())
-timg = Image.open(os.path.join(D, 't.png')).convert('RGBA')
-tgroups = [t[2] for t in tiles] + [[f] for f in range(len(rects))]
-tplace, timgs = paginate(timg, rects, tgroups)
-assert all(w <= 255 and h <= 255 for w, h in (im.size for im in timgs))
-write('tp', tplace, timgs)
+if DO_T:
+    timg = Image.open(os.path.join(D, 't.png')).convert('RGBA')
+    tgroups = [t[2] for t in tiles] + [[f] for f in range(len(rects))]
+    tplace, timgs = paginate(timg, rects, tgroups)
+    assert all(w <= 255 and h <= 255 for w, h in (im.size for im in timgs))
+    write('tp', tplace, timgs)
+    os.remove(os.path.join(D, 't.png'))
 
 srects, spr = read_s(open(os.path.join(D, 's.bin'), 'rb').read())
-simg = Image.open(os.path.join(D, 's2.png'))
-assert simg.mode == 'P'
-splace, simgs = paginate(simg, srects, spr + [[f] for f in range(len(srects))])
-write('sp', splace, simgs)
-os.remove(os.path.join(D, 't.png')); os.remove(os.path.join(D, 's2.png'))
+if DO_S:
+    simg = Image.open(os.path.join(D, 's2.png'))
+    assert simg.mode == 'P'
+    splace, simgs = paginate(simg, srects, spr + [[f] for f in range(len(srects))])
+    write('sp', splace, simgs)
+    os.remove(os.path.join(D, 's2.png'))
 
-if len(sys.argv) > 2:
+if 'report' in ARGS and DO_T and DO_S:
     def kb(pages, imgs): return sum(imgs[p].size[0] * imgs[p].size[1] for p in pages) * 4 // 1024
     coin = [i for i, t in enumerate(tiles) if t[0] & 32][0]
     res = []

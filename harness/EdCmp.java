@@ -54,7 +54,7 @@ public class EdCmp {
             if (Res.paged) {
               long px = 0;
               Image[][] ps = { Res.tPage, Res.sPage, Res.gPage };
-              for (int q = 0; q < 3; q++) for (int i = 0; i < ps[q].length; i++) if (ps[q][i] != null) px += ps[q][i].getWidth() * ps[q][i].getHeight();
+              for (int q = 0; q < 3; q++) if (ps[q] != null) for (int i = 0; i < ps[q].length; i++) if (ps[q][i] != null) px += ps[q][i].getWidth() * ps[q][i].getHeight();
               if (px * 4 / 1024 > worst) { worst = (int) (px * 4 / 1024); worstAt = id + ":" + f; }
             }
           }
