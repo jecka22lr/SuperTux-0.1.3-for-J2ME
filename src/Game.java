@@ -38,7 +38,7 @@ final class Game extends GameCanvas implements Runnable {
   // time
   long now;                 // game time in ms
   int frameCounter;         // 0.1.3's global_frame_counter (25 ms ticks)
-  int fpsCount, worstFrame; long fpsT, lastDraw; String fpsText = "0.0";
+  int fpsCount, worstFrame; long fpsT, lastDraw; String fpsText = "0.0", memText = "";
 
   // layout
   boolean landscape;        // chosen layout
@@ -844,7 +844,7 @@ final class Game extends GameCanvas implements Runnable {
   // behind, so play starts with all the free memory instead of waiting for the phone to tidy up
   void settle() {
     if (!PAGED) return;
-    Res.needSprites(state == WORLDMAP ? 1 : 0);
+    Res.needSprites(state == WORLDMAP ? 1 : 0, true);   // and the last level's enemies and big Tux go
     System.gc();
   }
 
@@ -1820,8 +1820,10 @@ final class Game extends GameCanvas implements Runnable {
       if (t0 - fpsT >= 1000) {
         int f10 = (int) (fpsCount * 10000L / Math.max(1, t0 - fpsT));
         // with the slowest frame and the slowest sound start of that second: where the stalls are
-        fpsText = (f10 / 10) + "." + (f10 % 10) + " max" + worstFrame + " sfx" + sounds.stallMax
-            + (PAGED ? " " + Runtime.getRuntime().freeMemory() / 1024 + "k" : "");   // 2 MB jar: free memory
+        fpsText = (f10 / 10) + "." + (f10 % 10) + " max" + worstFrame + " sfx" + sounds.stallMax;
+        // 2 MB jars, a line under: free memory, what the pages take, pages that didn't fit at all
+        if (PAGED) memText = "free " + Runtime.getRuntime().freeMemory() / 1024 + "k pics " + Res.pageKB() + "k"
+            + (Res.starved > 0 ? " miss " + Res.starved : "");
         worstFrame = 0; sounds.stallMax = 0;
         fpsCount = 0; fpsT = t0;
       }
@@ -1968,6 +1970,7 @@ final class Game extends GameCanvas implements Runnable {
   }
 
   void draw(Graphics g) {
+    Res.tick++;
     Res.needSprites(state == WORLDMAP ? 1 : state == EDITOR ? 2 : 0);
     g.setClip(0, 0, sw, sh);
     if (helpOpen) { drawHelp(g); return; }
@@ -2471,6 +2474,7 @@ final class Game extends GameCanvas implements Runnable {
       hud(g, Res.WHITE, "FPS", 0, fy);
       hud(g, Res.GOLD, fpsText, 32, fy);
       fy += 10;
+      if (PAGED) { hud(g, Res.GOLD, memText, 0, fy); fy += 10; }
     }
     // the editor's test play: under the HUD (the bottom of the screen is where the touch buttons go)
     if (testMode) hud(g, Res.WHITE, "Press Softkey To Return", 0, fy);

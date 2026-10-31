@@ -55,6 +55,11 @@ final class Res {
   static byte[] tfp, sfp;              // a frame's page (0xff: none)
   static boolean[] tWant, sWant;
   static int spriteSet = -1;
+  // when each page was last drawn (Game.draw counts frames in tick): running out of memory lets go of
+  // the pages that haven't been drawn for a while, never the ones on screen
+  static int tick;
+  static int[] tUsed, sUsed;
+  static int starved;                  // pages that couldn't be loaded at all (the FPS readout shows it)
 
   private static byte[] readPages(String name, short[] fx, short[] fy) throws IOException {
     DataInputStream in = open(name);
@@ -75,22 +80,41 @@ final class Res {
     for (int i = 0; i < page.length; i++)
       if (!want[i] && page[i] != null) { page[i] = null; if (page == tPage) gPage[i] = null; freed = true; }
     if (freed) System.gc();
+    int[] used = page == tPage ? tUsed : sUsed;
     for (int i = 0; i < page.length; i++)
-      if (want[i] && page[i] == null) page[i] = loadPage(page, dir, i);
+      if (want[i]) { used[i] = tick; if (page[i] == null) page[i] = loadPage(page, dir, i); }
   }
 
-  // one page; out of memory: let go of every other page (they come back as they're drawn) and retry
+  // one page. Out of memory: let go of the see-through copies and of pages not drawn for 40 frames,
+  // then of pages not drawn this frame, and try again each time. Pages in use always stay, so a level
+  // that doesn't fit can't fall into dropping and reloading the same pages every frame.
   private static Image loadPage(Image[] page, String dir, int i) {
-    for (int k = 0; k < 2; k++) {
+    for (int k = 0; k < 3; k++) {
       try { return Image.createImage(dir + i + ".png"); }
       catch (OutOfMemoryError e) {
-        if (k == 1) break;
+        if (k == 2) break;
         dropGhosts();
-        for (int j = 0; j < page.length; j++) page[j] = null;
+        int age = k == 0 ? 40 : 1;
+        freeOld(tPage, tUsed, age); freeOld(sPage, sUsed, age);
         System.gc();
-      } catch (Throwable e) { break; }
+      } catch (Throwable e) { return null; }
     }
+    starved++;
     return null;
+  }
+
+  private static void freeOld(Image[] page, int[] used, int age) {
+    if (page == null) return;
+    for (int j = 0; j < page.length; j++) if (page[j] != null && tick - used[j] >= age) page[j] = null;
+  }
+
+  // memory the pages take, in KB (the FPS readout)
+  static int pageKB() {
+    long n = 0;
+    Image[][] ps = { tPage, sPage, gPage };
+    for (int k = 0; k < 3; k++) if (ps[k] != null)
+      for (int i = 0; i < ps[k].length; i++) if (ps[k][i] != null) n += ps[k][i].getWidth() * ps[k][i].getHeight();
+    return (int) (n >> 8);
   }
 
   static void dropGhosts() {
@@ -123,15 +147,19 @@ final class Res {
   }
 
   // sprite pages: 0 levels, menus and the title; 1 the world map; 2 the level editor (its icons; the
-  // enemies it shows load as they're drawn)
-  static void needSprites(int set) {
+  // enemies it shows load as they're drawn). Whatever else was loaded as it was drawn goes too.
+  static void needSprites(int set) { needSprites(set, false); }
+  static void needSprites(int set, boolean again) {
+    if (again) spriteSet = -1;
     if (!sPaged || set == spriteSet) return;
     spriteSet = set;
     for (int i = 0; i < sWant.length; i++) sWant[i] = false;
     for (int s = 0; s < sFrames.length; s++) {
       boolean ui = s >= Spr.ONEUP && s < Spr.IC_UP || s == Spr.IC_LEFT || s == Spr.IC_RIGHT;
       boolean ed = s >= Spr.IC_UP && s < Spr.WM_TILES || s == Spr.LARGETUX_WALK_RIGHT;
-      if (set == 0 ? ui || s < Spr.ONEUP : set == 1 ? ui || s >= Spr.WM_TILES : ui || ed) {
+      // levels: small Tux and the items up front; big and fire Tux and the enemies load when first drawn
+      boolean lv = s <= Spr.SMALLTUX_STAR || s >= Spr.ONEUP && s <= Spr.CLOUD;
+      if (set == 0 ? ui || lv : set == 1 ? ui || s >= Spr.WM_TILES : ui || ed) {
         short[] fr = sFrames[s];
         for (int j = 0; j < fr.length; j++) { int p = sfp[fr[j]] & 0xff; if (p < sWant.length) sWant[p] = true; }
       }
@@ -143,6 +171,7 @@ final class Res {
     if (!paged) return tileImg;
     int p = tfp[f] & 0xff;
     if (p >= tPage.length) return null;
+    tUsed[p] = tick;
     if (tPage[p] == null) tPage[p] = loadPage(tPage, "/tp/", p);
     return tPage[p];
   }
@@ -151,6 +180,7 @@ final class Res {
     if (!sPaged) return sprImg;
     int p = sfp[f] & 0xff;
     if (p >= sPage.length) return null;
+    sUsed[p] = tick;
     if (sPage[p] == null) sPage[p] = loadPage(sPage, "/sp/", p);
     return sPage[p];
   }
@@ -239,12 +269,12 @@ final class Res {
     if (paged) {
       tfp = readPages("/tp.bin", tfx, tfy);
       in = open("/tp.bin"); tPage = new Image[in.readUnsignedByte()]; in.close();
-      tWant = new boolean[tPage.length]; gPage = new Image[tPage.length];
+      tWant = new boolean[tPage.length]; gPage = new Image[tPage.length]; tUsed = new int[tPage.length];
     }
     if (sPaged) {
       sfp = readPages("/sp.bin", sfx, sfy);
       in = open("/sp.bin"); sPage = new Image[in.readUnsignedByte()]; in.close();
-      sWant = new boolean[sPage.length];
+      sWant = new boolean[sPage.length]; sUsed = new int[sPage.length];
     }
   }
 

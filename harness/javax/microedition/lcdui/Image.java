@@ -3,7 +3,23 @@ import java.awt.image.BufferedImage;
 public class Image {
   BufferedImage b;
   Image(BufferedImage b) { this.b = b; }
+  // tests: a phone with little memory. Page loads (/tp/, /sp/) fail with OutOfMemoryError while the
+  // pages Res holds take budgetKB or more; loads counts the page loads
+  public static int budgetKB, loads;
   public static Image createImage(String name) throws java.io.IOException {
+    if (name.startsWith("/tp/") || name.startsWith("/sp/")) {
+      loads++;
+      if (budgetKB > 0) {
+        int kb = 0;
+        try {
+          java.lang.reflect.Method m = Class.forName("Res").getDeclaredMethod("pageKB", new Class[0]);
+          m.setAccessible(true);
+          kb = ((Integer) m.invoke(null, new Object[0])).intValue();
+        }
+        catch (Exception e) { }
+        if (kb >= budgetKB) throw new OutOfMemoryError("test budget");
+      }
+    }
     java.io.InputStream in = Image.class.getResourceAsStream(name);
     if (in == null) throw new java.io.IOException("missing " + name);
     BufferedImage r = javax.imageio.ImageIO.read(in);
