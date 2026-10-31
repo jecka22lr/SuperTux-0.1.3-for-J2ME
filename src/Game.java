@@ -224,7 +224,7 @@ final class Game extends GameCanvas implements Runnable {
   // ---------------- settings ----------------
   void loadSettings() {
     wantLandscape = getWidth() > getHeight();
-    if (PAGED) sounds.mode = Sound.TONES;     // first run on a 2 MB phone: no sound files in memory
+    if (PAGED) sounds.mode = Sound.NOKIA;     // weak phones: Nokia's own sound (tones where it's missing)
     try { showTouch = hasPointerEvents(); } catch (Throwable e) { }
     try {
       byte[] b = WorldMap.read("stux");
@@ -829,6 +829,14 @@ final class Game extends GameCanvas implements Runnable {
   // fadeout(): a black "Loading..." frame, then the world map
   void startLoading() { state = LOADING; stateT = 0; }
 
+  // weak-phone jar: load the sprite pages the next screen needs now and clear away what loading left
+  // behind, so play starts with all the free memory instead of waiting for the phone to tidy up
+  void settle() {
+    if (!PAGED) return;
+    Res.needSprites(state == WORLDMAP ? 1 : 0);
+    System.gc();
+  }
+
   void openWorldMap() {
     try {
       worldmap = new WorldMap(this, loadingMap, loadingSave);
@@ -837,6 +845,7 @@ final class Game extends GameCanvas implements Runnable {
     worldmap.load();
     Menu.setCurrent(null, now);
     state = WORLDMAP;
+    settle();
     music.song = worldmap.music;
     music.type = Music.NONE;
     music.play(Music.LEVEL);
@@ -1136,6 +1145,7 @@ final class Game extends GameCanvas implements Runnable {
     initParticles();
     music.song = level.music;
     timeEnd = 0;
+    settle();
     if (demo) { music.type = Music.NONE; return; }
     if (intro) {           // GameSession::levelintro: wait 1 to 3 seconds
       state = INTRO; stateMin = now + 1000; stateT = now + 3000; music.stop(); music.type = Music.NONE;
@@ -1200,6 +1210,7 @@ final class Game extends GameCanvas implements Runnable {
     if (state == TEXT) return;              // extro and credits
     if (quit) { enterTitle(); return; }
     state = WORLDMAP;
+    settle();
     music.song = worldmap.music;
     music.type = Music.NONE;
     music.play(Music.LEVEL);
