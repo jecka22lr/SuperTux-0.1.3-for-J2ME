@@ -116,8 +116,9 @@ final class Game extends GameCanvas implements Runnable {
       M_WM_RETURN = 30, M_WM_QUIT = 31, M_YES = 41, M_NO = 40, M_EDITOR = 7, M_KEYS = 50,
       M_STORY = 999, M_DETAIL = 15, M_FPSCAP = 16, M_RAM = 17, M_OPTHELP = 18, M_DRAWCAP = 19, M_ABOUT = 8, M_SFXFMT = 22, M_PAUSEMUS = 23, M_AUDIOINFO = 9,
       M_DBG_INV = 70, M_DBG_TIME = 71, M_DBG_TUX = 72, M_DBG_LIVES = 75, M_DBG_KILL = 76,
-      M_DBG_END = 77, M_DBG_FINISH = 78, M_DBG_WALK = 79, M_DBG_SOLVE = 80, M_DBG_SOLVEALL = 81;   // above any level number in a subset's level list
-  Menu mainMenu, optionsMenu, loadGameMenu, contribMenu, gameMenu, worldmapMenu, confirmMenu, keysMenu,
+      M_DBG_END = 77, M_DBG_FINISH = 78, M_DBG_WALK = 79, M_DBG_SOLVE = 80, M_DBG_SOLVEALL = 81,
+      M_SFXVOL = 24, M_MUSVOL = 25, M_TOGGLERUN = 26;   // above any level number in a subset's level list
+  Menu mainMenu, optionsMenu, audioMenu, loadGameMenu, contribMenu, gameMenu, worldmapMenu, confirmMenu, keysMenu,
       contribSubsetMenu;
   String[] contribSubsets; int contribSubset;
   int confirmSlot;
@@ -230,7 +231,7 @@ final class Game extends GameCanvas implements Runnable {
         wantLandscape = b[0] != 0;
         music.enabled = b[1] != 0; music.midiOnly = b[1] == 2;
         if (b.length > 3) { sounds.mode = soundModeOf(b[2]); showFps = b[3] != 0; }
-        if (b.length > 4 && b[4] >= 2 && b[4] <= 9) {
+        if (b.length > 4 && b[4] >= 2 && b[4] <= 10) {
           java.io.DataInputStream in = new java.io.DataInputStream(new java.io.ByteArrayInputStream(b, 5, b.length - 5));
           for (int i = 0; i < 5; i++) keymapUp[i] = in.readInt();
           hsScore = in.readInt(); hsName = in.readUTF();
@@ -243,12 +244,25 @@ final class Game extends GameCanvas implements Runnable {
           if (b[4] >= 7) drawCap = Math.max(0, Math.min(DRAWCAP_MS.length - 1, in.readByte()));
           if (b[4] >= 8) { int f = in.readByte(); if (f > 0 && f < Sound.FORMATS.length && getClass().getResourceAsStream("/a16/0.wav") != null && Sound.formatAvailable(f)) sounds.format = f; }   // test builds only
           if (b[4] >= 9) landKeysSet = in.readBoolean();
+          if (b[4] >= 10) {
+            sfxVol = Math.max(0, Math.min(3, in.readByte())); musicVol = Math.max(0, Math.min(3, in.readByte()));
+            toggleRun = in.readBoolean();
+          }
         }
       }
     } catch (Throwable e) { }
+    if (MAXPOTATO_ONLY) detail = MAXPOTATO;
+    sounds.volume = VOL_PCT[sfxVol]; music.volume = VOL_PCT[musicVol];
     Menu.noEffects = detail >= POTATO;
     setLayout(wantLandscape);
   }
+
+  // Options > Audio volumes (index into VOL_PCT) and Options > Toggle run
+  static final int[] VOL_PCT = { 25, 50, 75, 100 };
+  int sfxVol = 3, musicVol = 3;
+  boolean toggleRun;
+  // the Max Potato jar for weak phones: no pictures but the hard-edged sprites, Detail fixed
+  static final boolean MAXPOTATO_ONLY = Game.class.getResourceAsStream("/x/maxpotato") != null;
 
   // settings byte 2: 0 off, 1 normal (what older versions saved for off / on), 2 fast, 3 MIDI, 4 Nokia, 5 tones
   static int soundModeOf(byte b) {
@@ -263,7 +277,7 @@ final class Game extends GameCanvas implements Runnable {
       java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
       java.io.DataOutputStream out = new java.io.DataOutputStream(bo);
       out.writeByte(wantLandscape ? 1 : 0); out.writeByte(!music.enabled ? 0 : music.midiOnly ? 2 : 1); out.writeByte(soundByte(sounds.mode));
-      out.writeByte(showFps ? 1 : 0); out.writeByte(9);
+      out.writeByte(showFps ? 1 : 0); out.writeByte(10);
       for (int i = 0; i < 5; i++) out.writeInt(keymapUp[i]);
       out.writeInt(hsScore); out.writeUTF(hsName);
       for (int i = 0; i < 5; i++) out.writeInt(keymapLand[i]);
@@ -273,6 +287,7 @@ final class Game extends GameCanvas implements Runnable {
       out.writeByte(drawCap);
       out.writeByte(sounds.format);
       out.writeBoolean(landKeysSet);
+      out.writeByte(sfxVol); out.writeByte(musicVol); out.writeBoolean(toggleRun);
       out.close();
       byte[] b = bo.toByteArray();
       RecordStore rs = RecordStore.openRecordStore("stux", true);
@@ -316,9 +331,15 @@ final class Game extends GameCanvas implements Runnable {
     for (int i = 0; i < startTitle.length; i++) adventureMenu.add(Menu.GOTO, startTitle[i], 300 + i, loadGameMenu, false);
     adventureMenu.add(Menu.HL, "", 0).add(Menu.BACK, "Back", 0);
     buildMainMenu();
+    audioMenu = new Menu();
+    audioMenu.add(Menu.LABEL, "Audio", 0).add(Menu.HL, "", 0)
+        .add(Menu.STRINGSELECT, "Sound       ", M_SOUND)
+        .add(Menu.STRINGSELECT, "SFX volume  ", M_SFXVOL)
+        .add(Menu.STRINGSELECT, "Music       ", M_MUSIC)
+        .add(Menu.STRINGSELECT, "Music volume", M_MUSVOL)
+        .add(Menu.HL, "", 0).add(Menu.BACK, "Back", 0);
     optionsMenu.add(Menu.LABEL, "Options", 0).add(Menu.HL, "", 0)
-        .add(Menu.STRINGSELECT, "Sound     ", M_SOUND)
-        .add(Menu.STRINGSELECT, "Music     ", M_MUSIC)
+        .add(Menu.GOTO, "Audio", 0, audioMenu, false)
         .add(Menu.STRINGSELECT, "Detail    ", M_DETAIL)
         .add(Menu.STRINGSELECT, "FPS cap   ", M_FPSCAP)
         .add(Menu.STRINGSELECT, "Draw cap  ", M_DRAWCAP)
@@ -326,18 +347,22 @@ final class Game extends GameCanvas implements Runnable {
         .add(Menu.TOGGLE, "Show FPS  ", M_FPS, null, showFps)
         .add(Menu.TOGGLE, "Landscape ", M_LANDSCAPE, null, wantLandscape)
         .add(Menu.TOGGLE, "Show touch", M_TOUCH, null, showTouch)
+        .add(Menu.TOGGLE, "Toggle run", M_TOGGLERUN, null, toggleRun)
         .add(Menu.GOTO, "Keyboard Setup", 0, keysMenu = new Menu(), false)
         .add(Menu.GOTO, "Option Help", M_OPTHELP, null, false)    // no target: opens the help pages
         .add(Menu.HL, "", 0).add(Menu.BACK, "Back", 0);
-    optionsMenu.setList(M_SOUND, Sound.MODES, sounds.mode);
-    optionsMenu.setList(M_MUSIC, MUSIC_MODES, musicMode());
+    audioMenu.setList(M_SOUND, Sound.MODES, sounds.mode);
+    audioMenu.setList(M_SFXVOL, Sound.VOLUMES, sfxVol);
+    audioMenu.setList(M_MUSIC, MUSIC_MODES, musicMode());
+    audioMenu.setList(M_MUSVOL, Sound.VOLUMES, musicVol);
+    if (MAXPOTATO_ONLY) optionsMenu.remove(M_DETAIL);
     optionsMenu.setList(M_DETAIL, DETAIL_MODES, detail);
     optionsMenu.setList(M_FPSCAP, FPSCAP_MODES, fpsCap);
     optionsMenu.setList(M_DRAWCAP, DRAWCAP_MODES, drawCap);
     if (getClass().getResourceAsStream("/a16/0.wav") != null) {   // SFX format test build
-      optionsMenu.insertAfter(M_SOUND, Menu.STRINGSELECT, "SFX type  ", M_SFXFMT);
-      optionsMenu.setList(M_SFXFMT, Sound.FORMATS, sounds.format);
-      optionsMenu.insertAfter(M_SFXFMT, Menu.TOGGLE, "Pause music during SFX", M_PAUSEMUS);
+      audioMenu.insertAfter(M_SFXVOL, Menu.STRINGSELECT, "SFX type    ", M_SFXFMT);
+      audioMenu.setList(M_SFXFMT, Sound.FORMATS, sounds.format);
+      audioMenu.insertAfter(M_SFXFMT, Menu.TOGGLE, "Pause music during SFX", M_PAUSEMUS);
     }
     keysMenu.add(Menu.LABEL, "Key Setup", 0).add(Menu.HL, "", 0)
         .add(Menu.CONTROLFIELD, "Left move", M_KEYS).add(Menu.CONTROLFIELD, "Right move", M_KEYS + 1)
@@ -618,18 +643,29 @@ final class Game extends GameCanvas implements Runnable {
   // process_options_menu
   void optionsChanged() {
     // Sound is a left/right choice, which doesn't count as a hit
-    if (optionsMenu.listOf(M_SOUND) != sounds.mode) {
-      sounds.setMode(optionsMenu.listOf(M_SOUND));
+    if (audioMenu.listOf(M_SOUND) != sounds.mode) {
+      sounds.setMode(audioMenu.listOf(M_SOUND));
       sounds.play(Sound.DISTRO);       // a sample of the new mode
       saveSettings();
     }
-    if (optionsMenu.listOf(M_MUSIC) != musicMode()) {
-      int m = optionsMenu.listOf(M_MUSIC);
+    if (audioMenu.listOf(M_SFXVOL) != sfxVol) {
+      sfxVol = audioMenu.listOf(M_SFXVOL);
+      sounds.setVolume(VOL_PCT[sfxVol]);
+      sounds.play(Sound.DISTRO);
+      saveSettings();
+    }
+    if (audioMenu.listOf(M_MUSVOL) != musicVol) {
+      musicVol = audioMenu.listOf(M_MUSVOL);
+      music.setVolume(VOL_PCT[musicVol]);
+      saveSettings();
+    }
+    if (audioMenu.listOf(M_MUSIC) != musicMode()) {
+      int m = audioMenu.listOf(M_MUSIC);
       if (m == 2) music.setEnabled(false);
       else { music.setMidiOnly(m == 1); music.setEnabled(true); }
       saveSettings();
     }
-    if (optionsMenu.listOf(M_DETAIL) != detail) {
+    if (!MAXPOTATO_ONLY && optionsMenu.listOf(M_DETAIL) != detail) {
       detail = optionsMenu.listOf(M_DETAIL);
       Menu.noEffects = detail >= POTATO;
       Res.setHardSprites(detail == MAXPOTATO);
@@ -641,8 +677,8 @@ final class Game extends GameCanvas implements Runnable {
       fpsCap = optionsMenu.listOf(M_FPSCAP);
       saveSettings();
     }
-    if (optionsMenu.find(M_SFXFMT) >= 0 && optionsMenu.listOf(M_SFXFMT) != sounds.format) {
-      sounds.setFormat(optionsMenu.listOf(M_SFXFMT));
+    if (audioMenu.find(M_SFXFMT) >= 0 && audioMenu.listOf(M_SFXFMT) != sounds.format) {
+      sounds.setFormat(audioMenu.listOf(M_SFXFMT));
       sounds.play(Sound.DISTRO);
       saveSettings();
     }
@@ -650,6 +686,7 @@ final class Game extends GameCanvas implements Runnable {
       drawCap = optionsMenu.listOf(M_DRAWCAP);
       saveSettings();
     }
+    if (audioMenu.find(M_PAUSEMUS) >= 0) sounds.pauseMusic = audioMenu.isToggled(M_PAUSEMUS);
     if (optionsMenu.check() < 0) return;
     if (optionsMenu.check() == M_OPTHELP) { helpOpen = true; helpPage = 0; return; }
 
@@ -658,9 +695,9 @@ final class Game extends GameCanvas implements Runnable {
       if (ramSaver) { tc = null; tcG = null; tcLevel = null; touchImg = null; hudImg = null; }
       loadBackground();
     }
-    if (optionsMenu.find(M_PAUSEMUS) >= 0) sounds.pauseMusic = optionsMenu.isToggled(M_PAUSEMUS);
 
     showFps = optionsMenu.isToggled(M_FPS);
+    if (toggleRun != optionsMenu.isToggled(M_TOGGLERUN)) { toggleRun = !toggleRun; runLatched = false; saveSettings(); }
     if (showTouch != optionsMenu.isToggled(M_TOUCH)) { showTouch = !showTouch; setLayout(wantLandscape); }
     if (wantLandscape != optionsMenu.isToggled(M_LANDSCAPE)) setLayout(!wantLandscape);
     saveSettings();
@@ -728,7 +765,7 @@ final class Game extends GameCanvas implements Runnable {
           break;
         case M_QUIT: midlet.quit(); break;
       }
-    } else if (m == optionsMenu) optionsChanged();
+    } else if (m == optionsMenu || m == audioMenu) optionsChanged();
     else if (m == keysMenu) keysChanged();
     else if (m == contribSubsetMenu) {
       int n = contribSubsetMenu.check();
@@ -876,7 +913,7 @@ final class Game extends GameCanvas implements Runnable {
   // half stretched (like the level backgrounds), the paintings are scaled up and cropped at the sides
   Image textTall;
   void drawPicture(Graphics g, int n) {
-    if (textImg == null || textImgNo != n) {
+    if (textImgNo != n) {                // (tried once: the Max Potato jar has no pictures)
       textImg = null; textTall = null;
       try { textImg = Image.createImage("/b/" + n + ".png"); } catch (Exception e) { }
       textImgNo = n;
@@ -962,7 +999,8 @@ final class Game extends GameCanvas implements Runnable {
     { "Music",
       "Normal|MP3 recordings of the original songs (MIDI on phones without MP3).",
       "MIDI|Chiptune MIDI versions. Much lighter on slow phones.",
-      "Off|No music." },
+      "Off|No music.",
+      "Volumes|Options > Audio sets effects and music to 25, 50, 75 or 100%. A few phones ignore it." },
     { "Detail",
       "Full|Everything, like SuperTux 0.1.3.",
       "Low|Plain sky instead of the background picture, no snow or clouds. Faster.",
@@ -978,7 +1016,8 @@ final class Game extends GameCanvas implements Runnable {
       "Show FPS|Frames per second under the score.",
       "Landscape|The 320x240 layout. On an upright phone it is turned sideways. A phone turned sideways (or a landscape screen) uses it either way.",
       "Show touch|On-screen buttons and a MENU box for touch screens.",
-      "Keyboard Setup|Pick the key for each action. Portrait and Landscape keep their own keys: set them in each." }
+      "Toggle run|Off: hold the run key to run. On: press it once to run, again to walk (each press also throws a fireball).",
+      "Keyboard Setup|Pick the key for each action. Portrait and Landscape keep their own keys: set them in each. The last key the phone sent shows at the bottom." }
   };
   boolean helpOpen; int helpPage;
 
@@ -1056,6 +1095,7 @@ final class Game extends GameCanvas implements Runnable {
   }
 
   void loadLevel(boolean intro) {
+    runLatched = false; runHeld = false;
     float oldX = level != null && tux.dying != Player.DYING_NOT ? tux.x : -1;
     if (ramSaver) {                    // let go of everything the level doesn't need before loading it
       level = null; tcLevel = null; tc = null; tcG = null; touchImg = null; hudImg = null; gradImg = null; logoStrip = null;
@@ -1452,8 +1492,16 @@ final class Game extends GameCanvas implements Runnable {
     tux.inRight = (k & K_RIGHT) != 0;
     tux.inUp = (k & (K_UP | K_SELECT)) != 0;
     tux.inDown = (k & K_DOWN) != 0;
-    tux.inFire = (k & K_FIRE) != 0;
+    boolean run = (k & K_FIRE) != 0;
+    if (toggleRun) {
+      // Options > Toggle run: each press of the run key switches running on or off (and throws a
+      // fireball, which needs a press of its own anyway)
+      if (run && !runHeld) { runLatched = !runLatched; tux.firePulse = true; }
+      tux.inFire = runLatched;
+    } else tux.inFire = run;
+    runHeld = run;
   }
+  boolean runLatched, runHeld;
 
   // The joystick, held: tracked from its own presses. (getKeyStates() also reports number keys as
   // directions, so a number key bound to something else did that and a direction too, turned
@@ -1524,7 +1572,10 @@ final class Game extends GameCanvas implements Runnable {
     return b | K_ANY;
   }
 
+  public void keyRepeated(int code) { lastKey = code; }
+
   public void keyPressed(int code) {
+    if (code != 0) lastKey = code;
     int kb = keyBits(code);
     keys |= kb;
     if (kb == 0) joyKeys |= joyBits(code);      // a joystick bound in Keyboard Setup acts as bound
@@ -1801,7 +1852,7 @@ final class Game extends GameCanvas implements Runnable {
         m.action(menuAction(ev), now);
         if (m == gameMenu && gameMenu.check() == M_ABORT) { levelExit(WorldMap.ES_ABORT); return; }
         if (m == debugMenu) { dbgTux(); if (debugAction(debugMenu.check())) return; }
-        if (m == optionsMenu) optionsChanged();
+        if (m == optionsMenu || m == audioMenu) optionsChanged();
         if (m == keysMenu) keysChanged();
         return;
       }
@@ -1852,7 +1903,7 @@ final class Game extends GameCanvas implements Runnable {
         m.action(menuAction(ev), now);
         if (m == worldmapMenu && worldmapMenu.check() == M_WM_QUIT) { enterTitle(); return; }
         if (m == debugMapMenu) debugAction(debugMapMenu.check());
-        if (m == optionsMenu) optionsChanged();
+        if (m == optionsMenu || m == audioMenu) optionsChanged();
         if (m == keysMenu) keysChanged();
       }
       if (music.type != Music.LEVEL) music.play(Music.LEVEL);
@@ -1920,7 +1971,7 @@ final class Game extends GameCanvas implements Runnable {
         Res.fillAlpha(g, sw - 48, 0, 48, 16, 0x508080b4);
         Res.textCentered(g, Res.WHITE, "MENU", sw - 24, 3, 1);
       }
-      if (Menu.current != null) Menu.current.draw(g, sw / 2, sh, !landscape, now);
+      if (Menu.current != null) { Menu.current.draw(g, sw / 2, sh, !landscape, now); lastKeyLine(g); }
       return;
     }
     if (level == null) { g.setColor(0); g.fillRect(0, 0, sw, sh); return; }
@@ -1954,7 +2005,17 @@ final class Game extends GameCanvas implements Runnable {
         if (Menu.current == null) drawMenuCorner(g);
       }
     }
-    if (Menu.current != null) Menu.current.draw(g, sw / 2, sh, !landscape, now);
+    if (Menu.current != null) { Menu.current.draw(g, sw / 2, sh, !landscape, now); lastKeyLine(g); }
+  }
+
+  // Keyboard Setup: the last key the phone sent, to tell a key the phone never passes to Java from
+  // one that just didn't bind
+  int lastKey;
+  void lastKeyLine(Graphics g) {
+    if (Menu.current != keysMenu) return;
+    String t = lastKey == 0 ? "Last key: none yet" : "Last key: " + keyName(lastKey) + " (" + lastKey + ")";
+    g.setColor(0); g.fillRect(0, sh - 12, sw, 12);
+    Res.textCentered(g, Res.WHITE, t, sw / 2, sh - 10, 0);
   }
 
   // a short fade in from black when the screen changes (0.1.3's screens cut over with "Loading...")

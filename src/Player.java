@@ -22,6 +22,7 @@ final class Player extends Body {
   int dying = DYING_NOT;
   // input (true = pressed)
   boolean inLeft, inRight, inUp, inDown, inFire, oldUp, oldFire;
+  boolean firePulse;                 // Toggle run: a press of the run key, for one fireball
   // timers: 0 = stopped, else the end time
   long invincibleT, skiddingT, safeT, kickT, frameT;
   int frameMain;
@@ -196,10 +197,11 @@ final class Player extends Body {
     if (onGround() && !inUp) canJump = true;
     if (inUp || (!inUp && jumping)) handleVerticalInput();
 
-    if (inFire && !oldFire && gotCoffee) {
+    if (((inFire && !oldFire) || firePulse) && gotCoffee) {
       game.addBullet(x, y, vx, dir);
       oldFire = true;
     }
+    firePulse = false;
 
     if (!check(frameT)) {
       frameT = game.now + 25;

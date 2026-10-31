@@ -97,6 +97,28 @@ final class Sound implements Runnable {
     synchronized (this) { format = f; ready = -1; notify(); }
   }
 
+  // Options > Audio > SFX volume: 25, 50, 75 or 100 percent
+  static final String[] VOLUMES = { "25%", "50%", "75%", "100%" };
+  volatile int volume = 100;
+  void setVolume(int pct) {
+    volume = pct;
+    Player[] ps = wav;
+    if (ps != null) for (int i = 0; i < ps.length; i++) applyVolume(ps[i], pct);
+    MidiSfx m = midi;
+    if (m != null) m.volume(pct);
+    NokiaSfx k = nokia;
+    if (k != null) k.gain(pct);
+  }
+  // a player's MMAPI volume, where the phone has the control (not every one does)
+  static void applyVolume(Player p, int pct) {
+    if (p == null) return;
+    try {
+      Object c = p.getControl("VolumeControl");
+      if (c instanceof javax.microedition.media.control.VolumeControl)
+        ((javax.microedition.media.control.VolumeControl) c).setLevel(pct);
+    } catch (Throwable e) { }
+  }
+
   void setMode(int m) {
     if (m < NORMAL || m > OFF || m == mode) return;
     stop();
@@ -178,7 +200,7 @@ final class Sound implements Runnable {
     } else if (m == MIDI && midi == null) {
       try {
         MidiSfx s = new MidiSfx();
-        if (s.open()) midi = s;
+        if (s.open()) { s.volume(volume); midi = s; }
       } catch (Throwable e) { }
     } else if (m == NOKIA && nokia == null) {
       nokiaStatus = "no Nokia sound API";
@@ -190,6 +212,7 @@ final class Sound implements Runnable {
             if (b != null) s.load(i, b);
           }
           nokiaStatus = s.loaded + " of " + COUNT + " effects loaded";
+          s.gain(volume);
           if (s.loaded > 0) nokia = s; else s.release();
         } catch (Throwable e) { nokiaStatus = "Nokia sound API can't play WAV"; }
       }
@@ -248,6 +271,7 @@ final class Sound implements Runnable {
       Player p = Manager.createPlayer(new ByteArrayInputStream(b), FORMAT_TYPE[format]);
       p.realize();
       p.prefetch();
+      applyVolume(p, volume);
       try { long d = p.getDuration(); lengthMs[n] = d > 0 ? (int) (d / 1000) : 0; } catch (Throwable e) { }
       return p;
     } catch (Throwable e) { return null; }
@@ -300,7 +324,7 @@ final class Sound implements Runnable {
       } else {
         // a drum becomes a short low blip; playTone returns at once, so wait out the note here
         if (ch == 9) { note = 40 + (note & 7); ms = Math.min(ms, 40); }
-        try { Manager.playTone(note, ms, 70); } catch (Throwable e) { }
+        try { Manager.playTone(note, ms, Math.max(1, 70 * volume / 100)); } catch (Throwable e) { }
         try { Thread.sleep(ms); } catch (InterruptedException e) { }
       }
       if (mode != m) return;

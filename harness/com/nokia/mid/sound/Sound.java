@@ -4,5 +4,6 @@ public class Sound {
   public Sound(byte[] d, int f) { }
   public static int[] getSupportedFormats() { return new int[] { 1, FORMAT_WAV }; }
   public int getState() { return SOUND_STOPPED; }
+  public void setGain(int g) { }
   public void play(int loops) { } public void stop() { } public void release() { }
 }

@@ -44,7 +44,8 @@ final class Res {
 
   static void load() throws IOException {
     tileImg = Image.createImage("/t.png");
-    sprImg = Image.createImage("/s.png");
+    try { sprImg = Image.createImage("/s.png"); }
+    catch (IOException e) { sprImg = Image.createImage("/s2.png"); hardSprites = true; }   // the Max Potato jar
     fontImg = Image.createImage("/f.png");
     DataInputStream in = open("/t.bin");
     int n = in.readUnsignedShort();

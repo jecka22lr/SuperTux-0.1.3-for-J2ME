@@ -12,6 +12,7 @@ public abstract class Canvas extends Displayable {
   }
   public void keyPressed(int code) {}
   public void keyReleased(int code) {}
+  public void keyRepeated(int code) {}
   public boolean hasPointerEvents() { return true; }
   public void pointerPressed(int x, int y) {} public void pointerDragged(int x, int y) {} public void pointerReleased(int x, int y) {}
   public void hideNotify() {} public void showNotify() {}

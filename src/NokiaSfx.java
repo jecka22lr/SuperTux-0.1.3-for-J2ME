@@ -21,6 +21,12 @@ final class NokiaSfx {
     catch (Throwable e) { sounds[n] = null; return false; }
   }
 
+  // SFX volume: Nokia's gain runs 0..255
+  void gain(int pct) {
+    for (int i = 0; i < sounds.length; i++)
+      if (sounds[i] != null) { try { sounds[i].setGain(255 * pct / 100); } catch (Throwable e) { } }
+  }
+
   boolean play(int n) {
     Sound s = sounds[n];
     if (s == null) return false;

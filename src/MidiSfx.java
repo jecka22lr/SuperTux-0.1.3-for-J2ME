@@ -34,6 +34,11 @@ final class MidiSfx {
     } catch (Throwable e) { close(); return false; }
   }
 
+  // SFX volume: the channel volumes, scaled from the usual 110
+  void volume(int pct) {
+    try { midi.shortMidiEvent(0xB0, 7, 110 * pct / 100); midi.shortMidiEvent(0xB9, 7, 110 * pct / 100); } catch (Throwable e) { }
+  }
+
   void note(int channel, int note, boolean on) {
     try { midi.shortMidiEvent((on ? 0x90 : 0x80) | channel, note, on ? 100 : 0); } catch (Throwable e) { }
   }

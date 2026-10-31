@@ -16,6 +16,10 @@ final class Music {
   private boolean mp3Failed;
   boolean midiOnly;         // Options > Music > MIDI: cheaper on slow phones than decoding MP3
 
+  // Options > Audio > Music volume (percent)
+  int volume = 100;
+  synchronized void setVolume(int pct) { volume = pct; Sound.applyVolume(player, pct); }
+
   void setMidiOnly(boolean on) { if (on != midiOnly) { midiOnly = on; stop(); } }
 
   private String resolve(String stem) {
@@ -84,6 +88,7 @@ final class Music {
       player = Manager.createPlayer(in, type);
       player.realize();
       player.prefetch();
+      Sound.applyVolume(player, volume);
       player.setLoopCount(loops);
       player.start();
       return true;

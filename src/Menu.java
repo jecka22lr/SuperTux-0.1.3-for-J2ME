@@ -65,6 +65,15 @@ final class Menu {
     for (int i = last; i > at; i--) swap(i, i - 1);
   }
 
+  // takes the item with this id out (the Max Potato jar has no Detail choice)
+  void remove(int ident) {
+    int at = find(ident);
+    if (at < 0) return;
+    for (int i = at; i < count - 1; i++) swap(i, i + 1);
+    count--;
+    if (active >= count) active = count - 1;
+  }
+
   private void swap(int a, int b) {
     String s = text[a]; text[a] = text[b]; text[b] = s;
     s = input[a]; input[a] = input[b]; input[b] = s;

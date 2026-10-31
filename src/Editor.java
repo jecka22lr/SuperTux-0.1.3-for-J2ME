@@ -357,12 +357,9 @@ final class Editor {
         if (posX < 0) posX = 0;
         x = (col * 32 - posX) / 2 + 2;
       }
-      if (x >= panel) {
-        // past the right edge: scroll the level a tile; at the level's end, into the button bar
-        int max = lv.width * 32 + BAR * 2 - game.sw * 2;
-        if (dx > 0 && posX < max) { posX = Math.min(max, posX + 32); x = (col * 32 - posX) / 2 + 2; }
-        if (x >= panel) x = panel + 8;
-      }
+      // past the right edge: straight into the button bar (1 / 3, # + move, touch and the minimap
+      // scroll the level; scrolling here kept the bar out of reach until the level's end)
+      if (x >= panel) x = panel + 8;
       vmX = x;
     } else if (dy != 0 && dx == 0) {
       // over the bar: jump to the next button above or below in this column
@@ -959,7 +956,7 @@ final class Editor {
     String[] para = {
       "TileGroup / Objects: pick what to place. BkGrd, IntAct, FrGrd: the layer (background, interactive, foreground). Only IntAct tiles touch Tux.",
       "Wrench: level settings, length. Penguin: test the level. Arrows: next / previous level. # on a button: its name.",
-      "Moving the pointer past the right edge scrolls too. Touch: hold near an edge to scroll, or tap the map under the level.",
+      "Past the left edge the pointer scrolls, past the right edge it goes to the buttons. Touch: hold near an edge to scroll, or tap the map under the level.",
       "Typing: multi-tap, * = case, # or C deletes.",
     };
     // landscape is only 240 tall: no gap after the keys and the text starts higher when it wouldn't fit

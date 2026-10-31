@@ -6,7 +6,10 @@ J=/tmp/claude-0/j2me/jdk8u422-b05
 API=/home/claude/hex007/freej2me/build/classes     # javax.microedition signatures (compile only)
 PG=/tmp/claude-0/j2me/proguard-7.4.2/lib/proguard.jar
 rm -rf build dist; mkdir -p build/cls dist
-$J/bin/javac -nowarn -source 1.3 -target 1.3 -bootclasspath $J/jre/lib/rt.jar -cp $API -d build/cls src/*.java 2>&1 | grep -v JAVA_TOOL_OPTIONS | tee build/javac.log || true
+# compile-only stand-ins for API classes the stub library lacks (VolumeControl); never in the jar
+mkdir -p build/stubs
+$J/bin/javac -nowarn -source 1.3 -target 1.3 -bootclasspath $J/jre/lib/rt.jar -cp $API -d build/stubs $(find tools/apistubs -name '*.java') 2>&1 | grep -v JAVA_TOOL_OPTIONS || true
+$J/bin/javac -nowarn -source 1.3 -target 1.3 -bootclasspath $J/jre/lib/rt.jar -cp $API:build/stubs -d build/cls src/*.java 2>&1 | grep -v JAVA_TOOL_OPTIONS | tee build/javac.log || true
 if grep -q "error" build/javac.log; then exit 1; fi
 ls build/cls/SuperTux.class >/dev/null
 cat > build/MANIFEST.MF <<M
@@ -28,6 +31,7 @@ cat > build/pg.pro <<P
 -outjars $PWD/dist/SuperTux.jar
 -libraryjars $J/jre/lib/rt.jar
 -libraryjars $API
+-libraryjars $PWD/build/stubs
 -microedition
 -target 1.3
 -dontobfuscate
@@ -55,6 +59,16 @@ python3 tools/repack.py dist/SuperTux-lite.jar
 SIZE=$(stat -c %s dist/SuperTux-lite.jar)
 if [ "$SIZE" -ge 1000000 ]; then echo "lite jar is $SIZE bytes: over the 1 MB limit"; exit 1; fi
 { cat build/MANIFEST.MF; echo "MIDlet-Jar-URL: SuperTux-lite.jar"; echo "MIDlet-Jar-Size: $SIZE"; } > dist/SuperTux-lite.jad
+# Max Potato jar for weak phones: the lite jar without any picture Max Potato doesn't use (level and
+# story backgrounds, the logo, the soft-edged sprite sheet), and Detail fixed at Max Potato
+mkdir -p build/mp && cd build/mp && unzip -q -o ../../dist/SuperTux-lite.jar && \
+  rm -f b/*.png lo.png s.png && [ -f s2.png ] && echo maxpotato > x/maxpotato && \
+  sed 's/^MIDlet-Description: .*/MIDlet-Description: SuperTux 0.1.3 J2ME - Beta Release 1.2, Max Potato for weak phones/' ../MANIFEST.MF > ../mp.mf && \
+  $J/bin/jar cfm ../../dist/SuperTux-MaxPotato.jar ../mp.mf $(ls | grep -v META-INF) 2>&1 | grep -v JAVA_TOOL_OPTIONS || true
+cd ../..
+python3 tools/repack.py dist/SuperTux-MaxPotato.jar
+SIZE=$(stat -c %s dist/SuperTux-MaxPotato.jar)
+{ cat build/mp.mf; echo "MIDlet-Jar-URL: SuperTux-MaxPotato.jar"; echo "MIDlet-Jar-Size: $SIZE"; } > dist/SuperTux-MaxPotato.jad
 # the full jar without the ATTNW mod (MP3 music, everything GPL): the one to publish, since ATTNW's
 # music and many of its backgrounds come from other games
 if [ -f res-atnw-only.txt ]; then
