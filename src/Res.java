@@ -31,6 +31,7 @@ final class Res {
   // Max Potato's sprite sheet: the same pictures with hard edges (s2.png, one see-through colour)
   static boolean hardSprites;
   static void setHardSprites(boolean on) {
+    if (paged) return;                 // the paged sheets are Max Potato's already
     if (on == hardSprites && sprImg != null) return;
     Image old = sprImg;
     sprImg = null;
@@ -42,10 +43,93 @@ final class Res {
     }
   }
 
+  // Max Potato jar (2 MB heap phones): the sheets come in small pages (tools/pages.py) and only the
+  // pages the level or the world map uses are kept. tfx/tfy and sfx/sfy are then page positions.
+  static boolean paged;
+  static Image[] tPage, sPage;
+  static byte[] tfp, sfp;              // a frame's page (0xff: none)
+  static boolean[] tWant, sWant;
+  static int spriteSet = -1;
+
+  private static byte[] readPages(String name, short[] fx, short[] fy) throws IOException {
+    DataInputStream in = open(name);
+    int pages = in.readUnsignedByte();
+    for (int i = 0; i < pages; i++) in.readUnsignedShort();
+    int n = in.readUnsignedShort();
+    byte[] fp = new byte[n];
+    for (int i = 0; i < n && i < fx.length; i++) {
+      fp[i] = in.readByte(); fx[i] = (short) in.readUnsignedByte(); fy[i] = (short) in.readUnsignedByte();
+    }
+    in.close();
+    return fp;
+  }
+
+  // drop the pages not wanted, then load the missing ones (one lot of memory at a time)
+  private static void fetch(Image[] page, boolean[] want, String dir) {
+    boolean freed = false;
+    for (int i = 0; i < page.length; i++) if (!want[i] && page[i] != null) { page[i] = null; freed = true; }
+    if (freed) System.gc();
+    for (int i = 0; i < page.length; i++)
+      if (want[i] && page[i] == null) {
+        try { page[i] = Image.createImage(dir + i + ".png"); }
+        catch (Throwable e) { page[i] = null; System.gc(); }
+      }
+  }
+
+  // the tile pages a level can show: its tiles, what they turn into (bricks, bonus blocks) and the coin
+  static void needTiles(Level l, int coin) {
+    if (!paged || l == null) return;
+    boolean[] tile = new boolean[tFrames.length];
+    byte[][] maps = { l.bg, l.ia, l.fg };
+    for (int m = 0; m < 3; m++) { byte[] b = maps[m]; for (int i = 0; i < b.length; i++) tile[b[i] & 0xff] = true; }
+    if (coin >= 0) tile[coin] = true;
+    for (boolean more = true; more; ) {
+      more = false;
+      for (int t = 0; t < tile.length; t++)
+        if (tile[t] && tNext[t] >= 0 && tNext[t] < tile.length && !tile[tNext[t]]) { tile[tNext[t]] = true; more = true; }
+    }
+    for (int i = 0; i < tWant.length; i++) tWant[i] = false;
+    for (int t = 0; t < tile.length; t++) if (tile[t]) {
+      short[] fr = tFrames[t];
+      for (int j = 0; j < fr.length; j++) { int p = tfp[fr[j]] & 0xff; if (p < tWant.length) tWant[p] = true; }
+    }
+    fetch(tPage, tWant, "/tp/");
+  }
+
+  // sprite pages: 0 levels, menus and the title; 1 the world map
+  static void needSprites(int set) {
+    if (!paged || set == spriteSet) return;
+    spriteSet = set;
+    for (int i = 0; i < sWant.length; i++) sWant[i] = false;
+    for (int s = 0; s < sFrames.length; s++) {
+      boolean ui = s >= Spr.ONEUP && s < Spr.IC_UP || s == Spr.IC_LEFT || s == Spr.IC_RIGHT;
+      if (set == 0 ? ui || s < Spr.ONEUP : ui || s >= Spr.WM_TILES) {
+        short[] fr = sFrames[s];
+        for (int j = 0; j < fr.length; j++) { int p = sfp[fr[j]] & 0xff; if (p < sWant.length) sWant[p] = true; }
+      }
+    }
+    fetch(sPage, sWant, "/sp/");
+  }
+
+  static Image tileImage(int f) {
+    if (!paged) return tileImg;
+    int p = tfp[f] & 0xff;
+    return p < tPage.length ? tPage[p] : null;
+  }
+
+  static Image spriteImage(int f) {
+    if (!paged) return sprImg;
+    int p = sfp[f] & 0xff;
+    return p < sPage.length ? sPage[p] : null;
+  }
+
   static void load() throws IOException {
-    tileImg = Image.createImage("/t.png");
-    try { sprImg = Image.createImage("/s.png"); }
-    catch (IOException e) { sprImg = Image.createImage("/s2.png"); hardSprites = true; }   // the Max Potato jar
+    paged = cls.getResourceAsStream("/tp.bin") != null;
+    if (!paged) {
+      tileImg = Image.createImage("/t.png");
+      try { sprImg = Image.createImage("/s.png"); }
+      catch (IOException e) { sprImg = Image.createImage("/s2.png"); hardSprites = true; }   // the Max Potato jar
+    } else hardSprites = true;
     fontImg = Image.createImage("/f.png");
     DataInputStream in = open("/t.bin");
     int n = in.readUnsignedShort();
@@ -84,6 +168,12 @@ final class Res {
       for (int j = 0; j < f; j++) sFrames[i][j] = in.readShort();
     }
     in.close();
+    if (paged) {
+      tfp = readPages("/tp.bin", tfx, tfy); sfp = readPages("/sp.bin", sfx, sfy);
+      in = open("/tp.bin"); tPage = new Image[in.readUnsignedByte()]; in.close();
+      in = open("/sp.bin"); sPage = new Image[in.readUnsignedByte()]; in.close();
+      tWant = new boolean[tPage.length]; sWant = new boolean[sPage.length];
+    }
   }
 
   // draw tile (compact index) with its top left at screen x,y; tick = 25 ms frame counter
@@ -91,7 +181,9 @@ final class Res {
     short[] fr = tFrames[t];
     if (fr.length == 0) return;
     int f = fr.length == 1 ? fr[0] : fr[((tick * 25) / tAnim[t]) % fr.length];
-    g.drawRegion(tileImg, tfx[f], tfy[f], tfw[f] & 0xff, tfh[f] & 0xff, 0, x, y, Graphics.TOP | Graphics.LEFT);
+    Image img = paged ? tileImage(f) : tileImg;
+    if (img == null) return;
+    g.drawRegion(img, tfx[f], tfy[f], tfw[f] & 0xff, tfh[f] & 0xff, 0, x, y, Graphics.TOP | Graphics.LEFT);
   }
 
   static void drawTileImg(Graphics g, Image img, int t, int x, int y, int tick) {
@@ -105,7 +197,9 @@ final class Res {
   static void drawSprite(Graphics g, int s, int sx, int sy, long time) {
     short[] fr = sFrames[s];
     int f = fr[fr.length == 1 ? 0 : (int) ((time / sDelay[s]) % fr.length)];
-    g.drawRegion(sprImg, sfx[f], sfy[f], sfw[f] & 0xff, sfh[f] & 0xff, 0,
+    Image img = paged ? spriteImage(f) : sprImg;
+    if (img == null) return;
+    g.drawRegion(img, sfx[f], sfy[f], sfw[f] & 0xff, sfh[f] & 0xff, 0,
         sx - (sHx[s] >> 1), sy - (sHy[s] >> 1), Graphics.TOP | Graphics.LEFT);
   }
 
@@ -145,7 +239,9 @@ final class Res {
 
   static void drawSpriteTL(Graphics g, int s, int x, int y) {
     int f = sFrames[s][0];
-    g.drawRegion(sprImg, sfx[f], sfy[f], sfw[f] & 0xff, sfh[f] & 0xff, 0, x, y, Graphics.TOP | Graphics.LEFT);
+    Image img = paged ? spriteImage(f) : sprImg;
+    if (img == null) return;
+    g.drawRegion(img, sfx[f], sfy[f], sfw[f] & 0xff, sfh[f] & 0xff, 0, x, y, Graphics.TOP | Graphics.LEFT);
   }
 
   // a text file from res/x, one string per line

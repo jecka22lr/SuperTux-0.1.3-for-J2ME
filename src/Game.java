@@ -224,6 +224,7 @@ final class Game extends GameCanvas implements Runnable {
   // ---------------- settings ----------------
   void loadSettings() {
     wantLandscape = getWidth() > getHeight();
+    if (PAGED) sounds.mode = Sound.TONES;     // first run on a 2 MB phone: no sound files in memory
     try { showTouch = hasPointerEvents(); } catch (Throwable e) { }
     try {
       byte[] b = WorldMap.read("stux");
@@ -252,6 +253,7 @@ final class Game extends GameCanvas implements Runnable {
       }
     } catch (Throwable e) { }
     if (MAXPOTATO_ONLY) detail = MAXPOTATO;
+    if (PAGED) ramSaver = true;      // 2 MB heap: no caches
     sounds.volume = VOL_PCT[sfxVol]; music.volume = VOL_PCT[musicVol];
     Menu.noEffects = detail >= POTATO;
     setLayout(wantLandscape);
@@ -262,6 +264,7 @@ final class Game extends GameCanvas implements Runnable {
   int sfxVol = 3, musicVol = 3;
   boolean toggleRun;
   // the Max Potato jar for weak phones: no pictures but the hard-edged sprites, Detail fixed
+  static final boolean PAGED = Game.class.getResourceAsStream("/tp.bin") != null;
   static final boolean MAXPOTATO_ONLY = Game.class.getResourceAsStream("/x/maxpotato") != null;
 
   // settings byte 2: 0 off, 1 normal (what older versions saved for off / on), 2 fast, 3 MIDI, 4 Nokia, 5 tones
@@ -356,6 +359,7 @@ final class Game extends GameCanvas implements Runnable {
     audioMenu.setList(M_MUSIC, MUSIC_MODES, musicMode());
     audioMenu.setList(M_MUSVOL, Sound.VOLUMES, musicVol);
     if (MAXPOTATO_ONLY) optionsMenu.remove(M_DETAIL);
+    if (PAGED) optionsMenu.remove(M_RAM);
     optionsMenu.setList(M_DETAIL, DETAIL_MODES, detail);
     optionsMenu.setList(M_FPSCAP, FPSCAP_MODES, fpsCap);
     optionsMenu.setList(M_DRAWCAP, DRAWCAP_MODES, drawCap);
@@ -497,7 +501,8 @@ final class Game extends GameCanvas implements Runnable {
         .add(Menu.GOTO, "Bonus Levels", M_CONTRIB, contribMenu, false)
         .add(Menu.GOTO, "Options", M_OPTIONS, optionsMenu, false)
         .add(Menu.ACTION, "Controls", M_CONTROLS)
-        .add(Menu.ACTION, "Level Editor", M_EDITOR);
+        ;
+    if (!PAGED) mainMenu.add(Menu.ACTION, "Level Editor", M_EDITOR);   // the paged jar has no full tile sheet
     if (detail >= POTATO) mainMenu.add(Menu.ACTION, "About", M_ABOUT);
     if (getClass().getResourceAsStream("/a16/0.wav") != null) mainMenu.add(Menu.ACTION, "Audio info", M_AUDIOINFO);   // test builds
     mainMenu.add(Menu.ACTION, "Credits", M_CREDITS)
@@ -690,7 +695,7 @@ final class Game extends GameCanvas implements Runnable {
     if (optionsMenu.check() < 0) return;
     if (optionsMenu.check() == M_OPTHELP) { helpOpen = true; helpPage = 0; return; }
 
-    if (ramSaver != optionsMenu.isToggled(M_RAM)) {
+    if (!PAGED && ramSaver != optionsMenu.isToggled(M_RAM)) {
       ramSaver = !ramSaver;
       if (ramSaver) { tc = null; tcG = null; tcLevel = null; touchImg = null; hudImg = null; }
       loadBackground();
@@ -1106,6 +1111,7 @@ final class Game extends GameCanvas implements Runnable {
     }
     try {
       level = testLevel != null ? new Level(testLevel) : Level.load(levelId);
+      Res.needTiles(level, coinTile);
     } catch (Exception e) {
       state = ERROR; message = "Level " + levelId + ": " + e; return;
     }
@@ -1791,7 +1797,8 @@ final class Game extends GameCanvas implements Runnable {
       if (t0 - fpsT >= 1000) {
         int f10 = (int) (fpsCount * 10000L / Math.max(1, t0 - fpsT));
         // with the slowest frame and the slowest sound start of that second: where the stalls are
-        fpsText = (f10 / 10) + "." + (f10 % 10) + " max" + worstFrame + " sfx" + sounds.stallMax;
+        fpsText = (f10 / 10) + "." + (f10 % 10) + " max" + worstFrame + " sfx" + sounds.stallMax
+            + (PAGED ? " " + Runtime.getRuntime().freeMemory() / 1024 + "k" : "");   // 2 MB jar: free memory
         worstFrame = 0; sounds.stallMax = 0;
         fpsCount = 0; fpsT = t0;
       }
@@ -1938,6 +1945,7 @@ final class Game extends GameCanvas implements Runnable {
   }
 
   void draw(Graphics g) {
+    Res.needSprites(state == WORLDMAP ? 1 : 0);
     g.setClip(0, 0, sw, sh);
     if (helpOpen) { drawHelp(g); return; }
     if (state == ERROR) {
@@ -2103,8 +2111,9 @@ final class Game extends GameCanvas implements Runnable {
         Res.drawTile(g, coinTile, ((int) bdX[i] - sx0) >> 1, ((int) bdY[i] + viewTop) >> 1, 0);
       if (pbEnd[i] != 0) {
         int f = Res.tFrames[pbTile[i]].length > 0 ? Res.tFrames[pbTile[i]][0] : -1;
-        if (f >= 0)
-          g.drawRegion(Res.tileImg, Res.tfx[f] + (Math.abs(rnd.nextInt()) % 8), Res.tfy[f] + (Math.abs(rnd.nextInt()) % 8), 8, 8, 0,
+        Image fi = f >= 0 ? Res.tileImage(f) : null;
+        if (fi != null)
+          g.drawRegion(fi, Res.tfx[f] + (Math.abs(rnd.nextInt()) % 8), Res.tfy[f] + (Math.abs(rnd.nextInt()) % 8), 8, 8, 0,
               ((int) pbX[i] - sx0) >> 1, ((int) pbY[i] + viewTop) >> 1, Graphics.TOP | Graphics.LEFT);
       }
     }

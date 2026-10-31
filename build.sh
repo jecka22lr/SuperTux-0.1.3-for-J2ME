@@ -69,6 +69,14 @@ cd ../..
 python3 tools/repack.py dist/SuperTux-MaxPotato.jar
 SIZE=$(stat -c %s dist/SuperTux-MaxPotato.jar)
 { cat build/mp.mf; echo "MIDlet-Jar-URL: SuperTux-MaxPotato.jar"; echo "MIDlet-Jar-Size: $SIZE"; } > dist/SuperTux-MaxPotato.jad
+# Max Potato for 2 MB heaps (Nokia 6600 fold): the same jar with the tile and sprite sheets cut into
+# small pages (tools/pages.py), so only what the level or the world map shows is in memory
+rm -rf build/mpl && cp -r build/mp build/mpl && python3 tools/pages.py build/mpl && \
+  sed 's/^MIDlet-Description: .*/MIDlet-Description: SuperTux 0.1.3 J2ME - Beta Release 1.2, Max Potato for 2 MB phones/' build/MANIFEST.MF > build/mpl.mf && \
+  (cd build/mpl && $J/bin/jar cfm ../../dist/SuperTux-MaxPotato-2MB.jar ../mpl.mf $(ls | grep -v META-INF) 2>&1 | grep -v JAVA_TOOL_OPTIONS || true)
+python3 tools/repack.py dist/SuperTux-MaxPotato-2MB.jar
+SIZE=$(stat -c %s dist/SuperTux-MaxPotato-2MB.jar)
+{ cat build/mpl.mf; echo "MIDlet-Jar-URL: SuperTux-MaxPotato-2MB.jar"; echo "MIDlet-Jar-Size: $SIZE"; } > dist/SuperTux-MaxPotato-2MB.jad
 # the full jar without the ATTNW mod (MP3 music, everything GPL): the one to publish, since ATTNW's
 # music and many of its backgrounds come from other games
 if [ -f res-atnw-only.txt ]; then
