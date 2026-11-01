@@ -146,6 +146,18 @@ final class Game extends GameCanvas implements Runnable {
   static final int STRETCH_OFF = 0, STRETCH_FIT = 1, STRETCH_FILL = 2;
   int stretch;
   boolean bigScreen() { int W = getWidth(), H = getHeight(); return Math.max(W, H) >= 400 && Math.min(W, H) >= 300; }
+  // the Stretch row comes and goes with the screen's size, checked every frame: when the menus are
+  // built the canvas may not have its real size yet (full screen not set, Java's own window first)
+  boolean stretchRow;
+  void stretchRow() {
+    boolean big = bigScreen();
+    if (big == stretchRow || optionsMenu == null) return;
+    stretchRow = big;
+    if (big) {
+      optionsMenu.insertAfter(optionsMenu.find(M_ANIMS) >= 0 ? M_ANIMS : M_TOGGLERUN, Menu.STRINGSELECT, "Stretch   ", M_STRETCH);
+      optionsMenu.setList(M_STRETCH, STRETCH_MODES, stretch);
+    } else optionsMenu.remove(M_STRETCH);
+  }
   static final int[] DRAWCAP_MS = { 0, 50, 66, 100 };
   int drawCap;
   int detail = FULL;
@@ -368,7 +380,6 @@ final class Game extends GameCanvas implements Runnable {
         .add(Menu.TOGGLE, "Show touch", M_TOUCH, null, showTouch)
         .add(Menu.TOGGLE, "Toggle run", M_TOGGLERUN, null, toggleRun)
         .add(Menu.TOGGLE, "Animations", M_ANIMS, null, anims)
-        .add(Menu.STRINGSELECT, "Stretch   ", M_STRETCH)
         .add(Menu.GOTO, "Keyboard Setup", 0, keysMenu = new Menu(), false)
         .add(Menu.GOTO, "Option Help", M_OPTHELP, null, false)    // no target: opens the help pages
         .add(Menu.HL, "", 0).add(Menu.BACK, "Back", 0);
@@ -379,8 +390,8 @@ final class Game extends GameCanvas implements Runnable {
     if (MAXPOTATO_ONLY) optionsMenu.remove(M_DETAIL);
     if (PAGED) optionsMenu.remove(M_RAM);
     if (!MAXPOTATO_ONLY) optionsMenu.remove(M_ANIMS);
-    if (!bigScreen()) optionsMenu.remove(M_STRETCH);
-    else optionsMenu.setList(M_STRETCH, STRETCH_MODES, stretch);
+    optionsMenu.remove(M_STRETCH);
+    stretchRow = false; stretchRow();
     optionsMenu.setList(M_DETAIL, DETAIL_MODES, detail);
     optionsMenu.setList(M_FPSCAP, FPSCAP_MODES, fpsCap);
     optionsMenu.setList(M_DRAWCAP, DRAWCAP_MODES, drawCap);
@@ -1922,6 +1933,7 @@ final class Game extends GameCanvas implements Runnable {
 
   void frame(long dt) {
     if (layoutDirty) { layoutDirty = false; setLayout(wantLandscape); }
+    stretchRow();
     int ev = 0, e;
     nCodes = 0;
     while ((e = nextEvent()) != 0) {
