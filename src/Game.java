@@ -139,25 +139,13 @@ final class Game extends GameCanvas implements Runnable {
   // pixels to blend), a still title screen, and bad guys a screen or more away sleep until Tux comes
   // near. Options > Draw cap: draw fewer frames than the game runs, so the game keeps its speed
   static final String[] DRAWCAP_MODES = { "Max", "20", "15", "10" };
-  // Options > Stretch, on screens bigger than the game's 240x320 / 320x240 (WVGA and such): Off draws it
-  // at its size in the middle, Fit scales it up as far as it goes keeping its shape, Fill covers the
-  // whole screen
+  // Options > Stretch, for screens bigger than the game's 240x320 / 320x240 (WVGA and such): Off draws
+  // it at its size in the middle, Fit scales it as far as it goes keeping its shape, Fill covers the
+  // whole screen. Always in the menu: phones and emulators don't all tell the game their real size
+  // in time to decide
   static final String[] STRETCH_MODES = { "Off", "Fit", "Fill" };
   static final int STRETCH_OFF = 0, STRETCH_FIT = 1, STRETCH_FILL = 2;
   int stretch;
-  boolean bigScreen() { int W = getWidth(), H = getHeight(); return Math.max(W, H) >= 400 && Math.min(W, H) >= 300; }
-  // the Stretch row comes and goes with the screen's size, checked every frame: when the menus are
-  // built the canvas may not have its real size yet (full screen not set, Java's own window first)
-  boolean stretchRow;
-  void stretchRow() {
-    boolean big = bigScreen();
-    if (big == stretchRow || optionsMenu == null) return;
-    stretchRow = big;
-    if (big) {
-      optionsMenu.insertAfter(optionsMenu.find(M_ANIMS) >= 0 ? M_ANIMS : M_TOGGLERUN, Menu.STRINGSELECT, "Stretch   ", M_STRETCH);
-      optionsMenu.setList(M_STRETCH, STRETCH_MODES, stretch);
-    } else optionsMenu.remove(M_STRETCH);
-  }
   static final int[] DRAWCAP_MS = { 0, 50, 66, 100 };
   int drawCap;
   int detail = FULL;
@@ -380,6 +368,7 @@ final class Game extends GameCanvas implements Runnable {
         .add(Menu.TOGGLE, "Show touch", M_TOUCH, null, showTouch)
         .add(Menu.TOGGLE, "Toggle run", M_TOGGLERUN, null, toggleRun)
         .add(Menu.TOGGLE, "Animations", M_ANIMS, null, anims)
+        .add(Menu.STRINGSELECT, "Stretch   ", M_STRETCH)
         .add(Menu.GOTO, "Keyboard Setup", 0, keysMenu = new Menu(), false)
         .add(Menu.GOTO, "Option Help", M_OPTHELP, null, false)    // no target: opens the help pages
         .add(Menu.HL, "", 0).add(Menu.BACK, "Back", 0);
@@ -390,8 +379,7 @@ final class Game extends GameCanvas implements Runnable {
     if (MAXPOTATO_ONLY) optionsMenu.remove(M_DETAIL);
     if (PAGED) optionsMenu.remove(M_RAM);
     if (!MAXPOTATO_ONLY) optionsMenu.remove(M_ANIMS);
-    optionsMenu.remove(M_STRETCH);
-    stretchRow = false; stretchRow();
+    optionsMenu.setList(M_STRETCH, STRETCH_MODES, stretch);
     optionsMenu.setList(M_DETAIL, DETAIL_MODES, detail);
     optionsMenu.setList(M_FPSCAP, FPSCAP_MODES, fpsCap);
     optionsMenu.setList(M_DRAWCAP, DRAWCAP_MODES, drawCap);
@@ -722,7 +710,7 @@ final class Game extends GameCanvas implements Runnable {
       drawCap = optionsMenu.listOf(M_DRAWCAP);
       saveSettings();
     }
-    if (optionsMenu.find(M_STRETCH) >= 0 && optionsMenu.listOf(M_STRETCH) != stretch) {
+    if (optionsMenu.listOf(M_STRETCH) != stretch) {
       stretch = optionsMenu.listOf(M_STRETCH);
       scaled = null;
       saveSettings();
@@ -1070,7 +1058,7 @@ final class Game extends GameCanvas implements Runnable {
       "Landscape|The 320x240 layout. On an upright phone it is turned sideways. A phone turned sideways (or a landscape screen) uses it either way.",
       "Show touch|On-screen buttons and a MENU box for touch screens.",
       "Toggle run|Off: hold the run key to run. On: press it once to run, again to walk (each press also throws a fireball).",
-      "Stretch|Screens bigger than the game (WVGA and such) only. Off: the game at its own size in the middle. Fit: as big as it goes, same shape. Fill: the whole screen, stretched. Fit and Fill cost some speed.",
+      "Stretch|For screens bigger than the game (WVGA and such). Off: the game at its own size in the middle. Fit: as big as it goes, same shape. Fill: the whole screen, stretched. Fit and Fill cost some speed.",
       "Animations|Minimal Editions only: animated tiles, bouncing bricks and coins, floating scores and the walking title come back. A little slower, no extra memory.",
       "Keyboard Setup|Pick the key for each action. Portrait and Landscape keep their own keys: set them in each. The last key the phone sent shows at the bottom." }
   };
@@ -1711,7 +1699,7 @@ final class Game extends GameCanvas implements Runnable {
   // screen to game coordinates (sideways landscape is drawn turned 90 degrees)
   private void pointer(int type, int x, int y) {
     int W = getWidth(), H = getHeight(), lx, ly;
-    if (stretch != STRETCH_OFF && bigScreen() && scMapX != null && scDW > 0 && scDH > 0) {
+    if (stretch != STRETCH_OFF && scMapX != null && scDW > 0 && scDH > 0) {
       int iw = rotate ? sh : sw, ih = rotate ? sw : sh;
       int px = (x - scDX) * iw / scDW, py = (y - scDY) * ih / scDH;   // on the picture as shown
       if (rotate) { lx = py; ly = 239 - px; } else { lx = px; ly = py; }
@@ -1933,7 +1921,6 @@ final class Game extends GameCanvas implements Runnable {
 
   void frame(long dt) {
     if (layoutDirty) { layoutDirty = false; setLayout(wantLandscape); }
-    stretchRow();
     int ev = 0, e;
     nCodes = 0;
     while ((e = nextEvent()) != 0) {
@@ -2038,7 +2025,11 @@ final class Game extends GameCanvas implements Runnable {
   void paintAll(Graphics screen) {
     int W = getWidth(), H = getHeight();
     screen.setClip(0, 0, W, H);
-    if (stretch != STRETCH_OFF && bigScreen()) { paintScaled(screen, W, H); return; }
+    if (stretch != STRETCH_OFF) {
+      scaleLayout(W, H);
+      // (a screen the game's size: nothing to scale, draw it the usual way)
+      if (scDW != (rotate ? sh : sw) || scDH != (rotate ? sw : sh)) { paintScaled(screen, W, H); return; }
+    }
     if (rotate) {
       Graphics g = buffer.getGraphics();
       draw(g);
