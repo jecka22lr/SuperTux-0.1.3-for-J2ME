@@ -59,7 +59,8 @@ final class Res {
   // the pages that haven't been drawn for a while, never the ones on screen
   static int tick;
   static int[] tUsed, sUsed;
-  static int starved;                  // pages that couldn't be loaded at all (the FPS readout shows it)
+  static int starved;
+  static int keepRecent;               // set while trimming during play: pages on screen stay                  // pages that couldn't be loaded at all (the FPS readout shows it)
 
   private static byte[] readPages(String name, short[] fx, short[] fy) throws IOException {
     DataInputStream in = open(name);
@@ -74,11 +75,15 @@ final class Res {
     return fp;
   }
 
-  // drop the pages not wanted, then load the missing ones (one lot of memory at a time)
+  // drop the pages not wanted (kept: anything drawn in the last 40 frames, still on screen), then load
+  // the missing ones (one lot of memory at a time)
   private static void fetch(Image[] page, boolean[] want, String dir) {
     boolean freed = false;
+    int[] used0 = page == tPage ? tUsed : sUsed;
     for (int i = 0; i < page.length; i++)
-      if (!want[i] && page[i] != null) { page[i] = null; if (page == tPage) gPage[i] = null; freed = true; }
+      if (!want[i] && page[i] != null && (tick - used0[i] >= 40 || keepRecent == 0)) {
+        page[i] = null; if (page == tPage) gPage[i] = null; freed = true;
+      }
     if (freed) System.gc();
     int[] used = page == tPage ? tUsed : sUsed;
     for (int i = 0; i < page.length; i++)
@@ -122,7 +127,10 @@ final class Res {
   }
 
   // the tile pages a level can show: its tiles, what they turn into (bricks, bonus blocks) and the coin
-  static void needTiles(Level l, int coin) {
+  static void needTiles(Level l, int coin) { needTiles(l, coin, 0); }
+
+  // from column col0 on only (the part of the level behind the screen can't come back)
+  static void needTiles(Level l, int coin, int col0) {
     if (!paged || l == null) return;
     if (keepTiles) {                   // load them all (once): like the whole sheet, a bit smaller
       for (int i = 0; i < tWant.length; i++) tWant[i] = true;
@@ -131,7 +139,11 @@ final class Res {
     }
     boolean[] tile = new boolean[tFrames.length];
     byte[][] maps = { l.bg, l.ia, l.fg };
-    for (int m = 0; m < 3; m++) { byte[] b = maps[m]; for (int i = 0; i < b.length; i++) tile[b[i] & 0xff] = true; }
+    int w = l.width; if (col0 < 0) col0 = 0;
+    for (int m = 0; m < 3; m++) {
+      byte[] b = maps[m];
+      for (int y = 0; y < Level.H; y++) for (int x = y * w + col0, e = y * w + w; x < e; x++) tile[b[x] & 0xff] = true;
+    }
     if (coin >= 0) tile[coin] = true;
     for (boolean more = true; more; ) {
       more = false;
@@ -144,6 +156,15 @@ final class Res {
       for (int j = 0; j < fr.length; j++) { int p = tfp[fr[j]] & 0xff; if (p < tWant.length) tWant[p] = true; }
     }
     fetch(tPage, tWant, "/tp/");
+  }
+
+  // during play (2 MB jars), every 32 columns: the pages only the part behind the screen used go, and
+  // the enemy sprites not drawn lately (they come back if one shows up again)
+  static void trim(Level l, int coin, int col0) {
+    keepRecent = 1;
+    needTiles(l, coin, col0);
+    if (sPaged) { int set = spriteSet; spriteSet = -1; needSprites(set); }
+    keepRecent = 0;                    // (fetch already ran the garbage collector if anything went)
   }
 
   // sprite pages: 0 levels, menus and the title; 1 the world map; 2 the level editor (its icons; the

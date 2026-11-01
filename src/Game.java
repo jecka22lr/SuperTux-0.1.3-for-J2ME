@@ -1157,6 +1157,7 @@ final class Game extends GameCanvas implements Runnable {
     initParticles();
     music.song = level.music;
     timeEnd = 0;
+    trimChunk = (int) scrollX >> 10;
     settle();
     if (demo) { music.type = Music.NONE; return; }
     if (intro) {           // GameSession::levelintro: wait 1 to 3 seconds
@@ -1366,10 +1367,22 @@ final class Game extends GameCanvas implements Runnable {
   }
 
   // ---------------- update ----------------
+  // 2 MB jars: every 32 columns scrolled, let go of the pictures only the part behind the screen used
+  // (not in levels that scroll back). trimChunk: the 1024-unit stretch the last trim was in
+  int trimChunk;
+  void trimBehind() {
+    if (!PAGED || level == null || level.backScrolling || level.autoscroll < 0) return;
+    int c = (int) scrollX >> 10;
+    if (c <= trimChunk) return;
+    trimChunk = c;
+    Res.trim(level, coinTile, ((int) scrollX >> 5) - 9);   // (wide pictures reach up to 8 columns back)
+  }
+
   void action(float fr) {
     tux.action(fr);
     tux.checkBounds();
     scrolling(fr);
+    trimBehind();
     for (int i = 0; i < NE; i++) {
       if (bdOn[i]) { bdY[i] += bdYm[i] * fr; bdYm[i] += 0.1f * fr; if (bdYm[i] >= 0) bdOn[i] = false; }
       if (pbEnd[i] != 0) {
