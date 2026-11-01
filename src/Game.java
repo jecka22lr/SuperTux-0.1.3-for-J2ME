@@ -1414,7 +1414,7 @@ final class Game extends GameCanvas implements Runnable {
     for (int i = bullets.size() - 1; i >= 0; i--) if (((Bullet) bullets.elementAt(i)).removable) bullets.removeElementAt(i);
   }
 
-  BadGuy[] bgArr = new BadGuy[0]; int[] bgSeen = new int[0];
+  BadGuy[] bgArr = new BadGuy[0]; int[] bgOrd = new int[0]; long[] bgPairs = new long[64];
 
   // World::collision_handler
   void collisions() {
@@ -1427,33 +1427,53 @@ final class Game extends GameCanvas implements Runnable {
         if (bl.overlaps(b)) { b.killMe(10); bl.removable = true; break; }
       }
     }
-    // every pair once, in the same order as 0.1.3's double loop, but a bad guy still waiting off screen
-    // is only paired with ones that have been seen (two waiting ones can't have moved into each other;
-    // a kicked Mr. Iceblock still knocks out one that hasn't woken up yet, as in 0.1.3). ATTNW levels
-    // have hundreds of bad guys, and the plain double loop was most of a frame on a slow phone.
+    // every pair 0.1.3's double loop would collide, in the same order, without trying all of them: bad
+    // guys are all 32x32 and don't move while colliding, so only ones less than 32 apart can touch.
+    // Sort them by x, collect the pairs that close (one of them seen: two still waiting off screen
+    // can't have moved into each other; a kicked Mr. Iceblock still knocks out one that hasn't woken up
+    // yet, as in 0.1.3), then go through those in 0.1.3's order. ATTNW levels have hundreds of bad guys
+    // and end in crowds of a hundred; trying every pair was most of a frame on a slow phone.
     int n = badguys.size();
-    if (bgArr.length < n) { bgArr = new BadGuy[n + 32]; bgSeen = new int[n + 32]; }
-    BadGuy[] arr = bgArr; int[] seenAt = bgSeen;
+    if (bgArr.length < n) { bgArr = new BadGuy[n + 32]; bgOrd = new int[n + 32]; }
+    BadGuy[] arr = bgArr; int[] ord = bgOrd;
     badguys.copyInto(arr);
-    int ns = 0;
-    for (int i = 0; i < n; i++) if (arr[i].seen) seenAt[ns++] = i;
-    for (int i = 0, k = 0; i < n; i++) {
-      while (k < ns && seenAt[k] <= i) k++;       // the seen ones after i
-      BadGuy a = arr[i];
-      if (a.dying != BadGuy.DYING_NOT || a.removable) continue;
-      if (a.seen) {
-        for (int j = i + 1; j < n; j++) {
-          BadGuy b = arr[j];
-          if (b.dying != BadGuy.DYING_NOT || b.removable) continue;
-          if (a.overlaps(b)) { b.collideBadguy(a); a.collideBadguy(b); }
-        }
-      } else {
-        for (int m = k; m < ns; m++) {
-          BadGuy b = arr[seenAt[m]];
-          if (b.dying != BadGuy.DYING_NOT || b.removable) continue;
-          if (a.overlaps(b)) { b.collideBadguy(a); a.collideBadguy(b); }
-        }
+    for (int i = 0; i < n; i++) ord[i] = i;
+    for (int gap = n / 2; gap > 0; gap = gap == 2 ? 1 : gap * 5 / 11)      // shell sort by x
+      for (int i = gap; i < n; i++) {
+        int v = ord[i]; float x = arr[v].x; int j = i;
+        for (; j >= gap && arr[ord[j - gap]].x > x; j -= gap) ord[j] = ord[j - gap];
+        ord[j] = v;
       }
+    int nc = 0;
+    for (int p = 0; p < n; p++) {
+      BadGuy a = arr[ord[p]];
+      for (int q = p + 1; q < n; q++) {
+        BadGuy b = arr[ord[q]];
+        if (b.x - a.x > 32) break;
+        if (!a.seen && !b.seen) continue;
+        float dy = b.y - a.y;
+        if (dy > 32 || dy < -32) continue;
+        int i = ord[p], j = ord[q];
+        if (nc == bgPairs.length) { long[] m = new long[nc * 2 + 64]; System.arraycopy(bgPairs, 0, m, 0, nc); bgPairs = m; }
+        bgPairs[nc++] = i < j ? ((long) i << 20) | j : ((long) j << 20) | i;
+      }
+    }
+    long[] pr = bgPairs;
+    for (int gap = nc / 2; gap > 0; gap = gap == 2 ? 1 : gap * 5 / 11)    // into 0.1.3's order
+      for (int i = gap; i < nc; i++) {
+        long v = pr[i]; int j = i;
+        for (; j >= gap && pr[j - gap] > v; j -= gap) pr[j] = pr[j - gap];
+        pr[j] = v;
+      }
+    int curI = -1; boolean aliveA = false;
+    for (int c = 0; c < nc; c++) {
+      int i = (int) (pr[c] >> 20), j = (int) (pr[c] & 0xfffff);
+      BadGuy a = arr[i];
+      if (i != curI) { curI = i; aliveA = a.dying == BadGuy.DYING_NOT && !a.removable; }   // (as the outer loop)
+      if (!aliveA) continue;
+      BadGuy b = arr[j];
+      if (b.dying != BadGuy.DYING_NOT || b.removable) continue;
+      if (a.overlaps(b)) { b.collideBadguy(a); a.collideBadguy(b); }
     }
     for (int i = 0; i < n; i++) arr[i] = null;    // (no stale references)
     if (tux.dying != Player.DYING_NOT) return;
