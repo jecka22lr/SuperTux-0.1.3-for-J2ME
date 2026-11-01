@@ -127,7 +127,7 @@ final class Game extends GameCanvas implements Runnable {
   String[] startTitle, startSave, startIntro; int[] startMap; int curStart;
   String[] bonusTitle; int[] bonusMap;
   String titleNote;
-  static final String RELEASE = "Beta Release 1.2";
+  static final String RELEASE = "Release 1.3";
   // Options > Music and Detail. Low: plain sky colour instead of the background picture, no snow or
   // clouds. Potato: also no tile animations (coins stand still), no flying scores, coins, brick
   // pieces or bouncing bricks, and no fades or menu slides: everything is there, with as little
@@ -1035,14 +1035,14 @@ final class Game extends GameCanvas implements Runnable {
       "FPS cap|How often the game runs, up to 33 times a second. Lower gives the phone spare time, which can smooth out sound and music.",
       "Draw cap|How often the screen is drawn. Lower is choppier but the game keeps its speed, and drawing is most of the work." },
     { "RAM saver",
-      "On|Uses less memory and looks the same, but runs a bit slower. For phones that crash or lose sounds when memory runs out. The lite and Max Potato jars also keep only the tiles the level uses.",
+      "On|Uses less memory and looks the same, but runs a bit slower. For phones that crash or lose sounds when memory runs out. The Lite Edition also keeps only the tiles the level uses.",
       "Off|Keeps pictures ready in memory for speed." },
     { "Other options",
       "Show FPS|Frames per second under the score.",
       "Landscape|The 320x240 layout. On an upright phone it is turned sideways. A phone turned sideways (or a landscape screen) uses it either way.",
       "Show touch|On-screen buttons and a MENU box for touch screens.",
       "Toggle run|Off: hold the run key to run. On: press it once to run, again to walk (each press also throws a fireball).",
-      "Animations|Max Potato jars only: animated tiles, bouncing bricks and coins, floating scores and the walking title come back. A little slower, no extra memory.",
+      "Animations|Minimal Editions only: animated tiles, bouncing bricks and coins, floating scores and the walking title come back. A little slower, no extra memory.",
       "Keyboard Setup|Pick the key for each action. Portrait and Landscape keep their own keys: set them in each. The last key the phone sent shows at the bottom." }
   };
   boolean helpOpen; int helpPage;

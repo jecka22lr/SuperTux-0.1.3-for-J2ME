@@ -20,7 +20,16 @@ J2ME Loader, Android: 33FPS, stable (Locked to 32FPS)
 Brutal rewrite of all of the code. Like, pretty much every line of code was adapted to Java... but the entire game is made to be as much of a 1:1 recreation as possible.
 
 # How to install?
-Lite JAR for 1MB limitations in OSes like Nokia S40, otherwise use the regular JAR. JAD available if needed.
+Pick the Edition that fits your phone. Every Edition installs as its own app (SuperTux F, N, L, M...), so you can keep several side by side, each with its own saves. JADs are there if your phone needs them.
+
+| Edition | File | For |
+|---|---|---|
+| Normal | SuperTux-Normal.jar | Most phones: everything in the game, MP3 music where the phone plays it |
+| Lite | SuperTux-Lite.jar | Phones with a 1 MB jar limit (Nokia S40 and others): MIDI music, all Detail modes |
+| Minimal | SuperTux-Minimal.jar | Phones with about 2 MB of Java memory (Nokia 6600 fold and others): Max Potato only, pictures loaded a piece at a time |
+| Full | SuperTux-Full.jar | Normal plus Adventure To The New World and I Wanna Be The SuperTux (separate ATTNW release) |
+| Full ATTNW | SuperTux-Full-ATTNW.jar | ATTNW's own lineup at full quality (separate ATTNW release) |
+| Minimal ATTNW | SuperTux-Minimal-ATTNW.jar | ATTNW's lineup for 2 MB phones (separate ATTNW release) |
 
 # Requirements
 This has not yet been tested on real firmware and as such I have no real expectations right now, but I have bought some devices for testing.
@@ -28,6 +37,23 @@ This has not yet been tested on real firmware and as such I have no real expecta
 # Issues
 Lite version of this game has very shitty MIDIs for the soundtrack. I might automate something to make them chiptune versions of the soundtrack. If you wanna make some human-made stuff I would much prefer that!
 On Symbian S60 platform phones with 369MHz CPUs, there are annoying lag spikes for every time a sound effect is played. This is not yet mitigated by different sound effect options except for OFF. This is a known issue unfortunately and allegedly some commercial J2ME games shipped without SFX for these.
+
+# What's new in Release 1.3
+Editions: Full, Normal, Lite and Minimal (plus ATTNW versions of Full and Minimal), each installing as its own app.
+
+Minimal Edition for phones with about 2 MB of Java memory, like the Nokia 6600 fold: the tile and sprite sheets come in small pages and only the ones the level, world map or editor shows are kept; the pages for parts of a level already played are let go as you go (levels that scroll back keep theirs). The level editor works there too, and Options > Animations brings back animated tiles, bouncing bricks and coins, floating scores and the walking title at no extra memory. Show FPS adds a line with free memory and how much the pictures take.
+
+Lite Edition: tiles in pages as well; with RAM saver on only the level's are kept.
+
+ATTNW's crowded levels: bad guys only check bad guys near them for collisions, with the same results as before, so levels with hundreds of them run far faster on slow phones.
+
+Controls: separate key setups for Portrait and Landscape, landscape layout whenever the screen is wider than tall (no more black bars), the joystick read on its own so number keys don't move Tux, the last key the phone sent shown in Keyboard Setup, and Options > Toggle run.
+
+Audio: SFX volume and Music volume (25 to 100%), and a reworked Nokia sound mode (the only lag-free one on some Symbian phones).
+
+Physics: Tux moves in small steps, so slow phones jump as high and walk down stairs like fast ones; no more tiny hops at the end of a level on emulators that skip frames.
+
+Fixes: waterfall tiles, the Max Potato menu, the editor pointer reaching its buttons, and more. The high score name entry is out for now.
 
 # What's new in Beta Release 1.2
 Community levels made for 0.1.3 under Bonus Levels: Tux Strikes Back by Christian Schaefers (19 levels and its story) and four classic CT's Domain levels by CT. da'Bomb and UnNamed, from the SuperTux add-on collection.
@@ -50,4 +76,4 @@ Options > Option Help explains every option on a few pages, like the Controls sc
 
 With Show touch on, a MENU box under the lives pauses the game; a stray tap on the level no longer does.
 
-Adventure To The New World (ATTNW) by Miksy91 is supported by the converter, but it's not in the released jars since its music and many of its backgrounds come from other games. With the mod's files, `tools/convert.py` and `build.sh` build `SuperTux.jar` (everything) and `SuperTux-ATTNW.jar` (the mod alone) yourself.
+Adventure To The New World (ATTNW) by Miksy91 is supported by the converter. Its music and many of its backgrounds come from other games, so the ATTNW Editions are only attached to a separate ATTNW release and their files aren't in this repository. With the mod's files, `tools/convert.py` and `build.sh` build them yourself.
