@@ -32,7 +32,7 @@ Pick the Edition that fits your phone. Every Edition installs as its own app (Su
 | Minimal ATTNW | SuperTux-Minimal-ATTNW.jar | ATTNW's lineup for 2 MB phones (separate ATTNW release) |
 
 # Requirements
-This has not yet been tested on real firmware and as such I have no real expectations right now, but I have bought some devices for testing.
+This has not yet been tested on enough of real firmware and as such I have no real set requirements right now, but I have bought some devices for testing and some others will test it for me. See benchmarks for a realistic preview.
 
 # Issues
 Lite version of this game has very shitty MIDIs for the soundtrack. I might automate something to make them chiptune versions of the soundtrack. If you wanna make some human-made stuff I would much prefer that!
