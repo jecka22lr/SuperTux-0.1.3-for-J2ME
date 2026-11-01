@@ -53,7 +53,7 @@ stock_tiles() {
 mkdir -p build/lite && cd build/lite && unzip -q -o ../../dist/SuperTux.jar && rm -f m/*.mp3 && \
   { [ ! -f ../../res-atnw-only.txt ] || xargs rm -f < ../../res-atnw-only.txt; } && \
   mv x/g-lite.txt x/g.txt && rm -f x/g-atnw.txt && rm -rf a16 a8 aa au && stock_tiles && \
-  cp t.png ../lite-t.png && PW=64 PH=64 python3 ../../tools/pages.py . tiles && \
+  echo lite > x/lite && cp t.png ../lite-t.png && PW=64 PH=64 python3 ../../tools/pages.py . tiles && \
   $J/bin/jar cfm ../../dist/SuperTux-lite.jar META-INF/MANIFEST.MF $(ls | grep -v META-INF) 2>&1 | grep -v JAVA_TOOL_OPTIONS || true
 cd ../..
 python3 tools/repack.py dist/SuperTux-lite.jar

@@ -16,6 +16,22 @@ LG t375 - 9-10 FPS on Landscape, 12 FPS on Portrait, 15 FPS with only Sound or M
 
 J2ME Loader, Android: 33FPS, stable (Locked to 32FPS)
 
+Sony Ericsson Vivaz - Full speed. (Was centered and small before Stretch.)
+
+Samsung Omnia - Full speed. (Was centered and small before Stretch.)
+
+Nokia E75 - Full speed with sound and music on.
+
+Nokia E72 - Full speed with sound and music on.
+
+Nokia E52 - Full speed with sound and music on.
+
+Sony Ericsson Aino - Full speed with music and sound on.
+
+Sony Ericsson TXT Pro - Laggy on Full detail. Use Low detail (the Lite Edition starts on it).
+
+Samsung Wave 533 - 25 FPS on Low detail with sound and music off. Full detail with music and sound is laggy, 10+ FPS.
+
 # What changed between the original port and this?
 Brutal rewrite of all of the code. Like, pretty much every line of code was adapted to Java... but the entire game is made to be as much of a 1:1 recreation as possible.
 
@@ -39,7 +55,11 @@ Lite version of this game has very shitty MIDIs for the soundtrack. I might auto
 On Symbian S60 platform phones with 369MHz CPUs, there are annoying lag spikes for every time a sound effect is played. This is not yet mitigated by different sound effect options except for OFF. This is a known issue unfortunately and allegedly some commercial J2ME games shipped without SFX for these.
 
 # What's new in Release 1.3.1 (hotfix)
-Options > Stretch on screens bigger than the game (WVGA, nHD and such): Off keeps it at its size in the middle, Fit scales it up as far as it goes keeping its shape, Fill covers the whole screen. Works sideways too, and taps land where you aim.
+Options > Stretch for screens bigger than the game (WVGA, nHD and such): Off keeps it at its size in the middle, Fit scales it up as far as it goes keeping its shape (the default), Fill covers the whole screen. Works sideways too, and taps land where you aim.
+
+Keys set in Keyboard Setup (QWERTY letters and such) now work in the menus too.
+
+The Lite Edition starts on Low detail.
 
 # What's new in Release 1.3
 Editions: Full, Normal, Lite and Minimal (plus ATTNW versions of Full and Minimal), each installing as its own app.

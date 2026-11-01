@@ -145,7 +145,7 @@ final class Game extends GameCanvas implements Runnable {
   // in time to decide
   static final String[] STRETCH_MODES = { "Off", "Fit", "Fill" };
   static final int STRETCH_OFF = 0, STRETCH_FIT = 1, STRETCH_FILL = 2;
-  int stretch;
+  int stretch = STRETCH_FIT;           // (on a screen the game's size Fit draws it as usual)
   static final int[] DRAWCAP_MS = { 0, 50, 66, 100 };
   int drawCap;
   int detail = FULL;
@@ -236,6 +236,7 @@ final class Game extends GameCanvas implements Runnable {
   void loadSettings() {
     wantLandscape = getWidth() > getHeight();
     if (PAGED) sounds.mode = Sound.NOKIA;     // weak phones: Nokia's own sound (tones where it's missing)
+    if (LITE) detail = LOW;                   // Lite Edition: old phones start on Low (Options > Detail)
     try { showTouch = hasPointerEvents(); } catch (Throwable e) { }
     try {
       byte[] b = WorldMap.read("stux");
@@ -279,6 +280,7 @@ final class Game extends GameCanvas implements Runnable {
   // the Max Potato jar for weak phones: no pictures but the hard-edged sprites, Detail fixed
   // the 2 MB jar (sprites in pages too; the lite jar has only its tiles in pages)
   static final boolean PAGED = Game.class.getResourceAsStream("/sp.bin") != null;
+  static final boolean LITE = Game.class.getResourceAsStream("/x/lite") != null;
   static final boolean MAXPOTATO_ONLY = Game.class.getResourceAsStream("/x/maxpotato") != null;
 
   // settings byte 2: 0 off, 1 normal (what older versions saved for off / on), 2 fast, 3 MIDI, 4 Nokia, 5 tones
@@ -1633,7 +1635,8 @@ final class Game extends GameCanvas implements Runnable {
     return 0;
   }
 
-  // menus and screens always use the standard keypad (a rebound key mustn't change what 2/8/5 do there)
+  // menus and screens use the standard keypad first (a rebound key mustn't change what 2/8/5 do there),
+  // then the joystick, then whatever keys Keyboard Setup bound (pressBits)
   int navBits(int code) {
     if (rotate) {
       switch (code) {
@@ -1666,6 +1669,10 @@ final class Game extends GameCanvas implements Runnable {
         if (a == UP) b = K_UP; else if (a == DOWN) b = K_DOWN; else if (a == LEFT) b = K_LEFT; else if (a == RIGHT) b = K_RIGHT;
       }
       if (a == FIRE) b = K_SELECT;
+    }
+    if (b == 0 && (state != PLAY || Menu.current != null)) {   // a key set in Keyboard Setup (a QWERTY letter, say) works in menus too
+      int k = keyBits(code) & (K_LEFT | K_RIGHT | K_UP | K_DOWN | K_FIRE);
+      b = k == K_FIRE ? K_SELECT | K_FIRE : k & ~K_FIRE;
     }
     return b | K_ANY;
   }
