@@ -34,7 +34,7 @@ cat > build/pg.pro <<P
 -libraryjars $PWD/build/stubs
 -microedition
 -target 1.3
--dontobfuscate
+-keepattributes Exceptions
 -dontoptimize
 -keep public class SuperTux
 -dontnote
@@ -131,21 +131,4 @@ if [ -f dist/SuperTux-noattnw.jar ]; then
 else
   E SuperTux.jar SuperTux-Normal "SuperTux N" "$D, Normal Edition"   # built without the ATTNW mod
 fi
-# Low jars: Lite and Normal that start on Low detail for slow phones (x/low; Options > Detail still
-# changes it), installing as their own apps
-low() {   # <edition file> <new file> <MIDlet name> <description>
-  python3 - "dist/$1.jar" "dist/low.jar" <<'P'
-import sys, zipfile
-src, dst = sys.argv[1], sys.argv[2]
-z = zipfile.ZipFile(src); out = zipfile.ZipFile(dst, 'w')
-for i in z.infolist(): out.writestr(i, z.read(i.filename))
-i = zipfile.ZipInfo('x/low', (2026, 1, 1, 0, 0, 0)); i.external_attr = 0o644 << 16
-out.writestr(i, b'low\n'); out.close()
-P
-  E low.jar "$2" "$3" "$4"
-}
-low SuperTux-Lite SuperTux-Lite-Low "SuperTux LL" "$D, Lite Low Edition (under 1 MB, MIDI, starts on Low)"
-SIZE=$(stat -c %s dist/SuperTux-Lite-Low.jar)
-if [ "$SIZE" -ge 1000000 ]; then echo "Lite Low jar is $SIZE bytes: over the 1 MB limit"; exit 1; fi
-low SuperTux-Normal SuperTux-Normal-Low "SuperTux NL" "$D, Normal Low Edition (starts on Low)"
 ls -la dist

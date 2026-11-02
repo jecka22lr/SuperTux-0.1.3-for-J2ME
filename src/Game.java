@@ -25,7 +25,7 @@ final class Game extends GameCanvas implements Runnable {
 
   // states
   static final int PLAY = 0, INTRO = 1, GAMEOVER = 2, ERROR = 4, TITLE = 5, WORLDMAP = 6, TEXT = 7,
-      CONTROLS = 8, LOADING = 9, EDITOR = 10, NOTICE = 12, ABOUT = 13, AUDIOINFO = 14;
+      CONTROLS = 8, LOADING = 9, EDITOR = 10, NOTICE = 12, ABOUT = 13, AUDIOINFO = 14, PICK = 15;
 
   final SuperTux midlet;
   volatile boolean running = true;
@@ -236,10 +236,10 @@ final class Game extends GameCanvas implements Runnable {
   void loadSettings() {
     wantLandscape = getWidth() > getHeight();
     if (PAGED) sounds.mode = Sound.NOKIA;     // weak phones: Nokia's own sound (tones where it's missing)
-    if (LOW_START) detail = LOW;              // the Low jars (Lite Low, Normal Low): slow phones start on Low
     try { showTouch = hasPointerEvents(); } catch (Throwable e) { }
     try {
       byte[] b = WorldMap.read("stux");
+      firstRun = b == null;
       if (b != null) {
         wantLandscape = b[0] != 0;
         music.enabled = b[1] != 0; music.midiOnly = b[1] == 2;
@@ -280,7 +280,6 @@ final class Game extends GameCanvas implements Runnable {
   // the Max Potato jar for weak phones: no pictures but the hard-edged sprites, Detail fixed
   // the 2 MB jar (sprites in pages too; the lite jar has only its tiles in pages)
   static final boolean PAGED = Game.class.getResourceAsStream("/sp.bin") != null;
-  static final boolean LOW_START = Game.class.getResourceAsStream("/x/low") != null;
   static final boolean MAXPOTATO_ONLY = Game.class.getResourceAsStream("/x/maxpotato") != null;
 
   // settings byte 2: 0 off, 1 normal (what older versions saved for off / on), 2 fast, 3 MIDI, 4 Nokia, 5 tones
@@ -1805,6 +1804,7 @@ final class Game extends GameCanvas implements Runnable {
       if (x >= sw - 48 && y < 18) return K_ESC | K_ANY;
       return x < sw / 2 ? K_LEFT | K_ANY : K_SELECT | K_ANY;
     }
+    if (state == PICK) return pickTouch(type, y);
     Menu m = Menu.current;
     if (type == T_RELEASE) { touchKeys = 0; return 0; }
     if (m != null && state != NOTICE) {
@@ -1863,9 +1863,7 @@ final class Game extends GameCanvas implements Runnable {
     else if (state == WORLDMAP && Menu.current == null) Menu.setCurrent(worldmapMenu, now);
   }
 
-  // ---------------- main loop ----------------
-  public void run() {
-    Graphics screen = getGraphics();
+  void startGame() {
     try { Res.load(); } catch (Throwable e) { state = ERROR; message = "Load error: " + e; }
     if (detail == MAXPOTATO) Res.setHardSprites(true);
     sounds.init();
@@ -1875,6 +1873,80 @@ final class Game extends GameCanvas implements Runnable {
         if ((Res.tFlags[i] & Res.DISTRO) != 0) { coinTile = i; break; }
       try { enterTitle(); state = NOTICE; stateT = System.currentTimeMillis() + 1000; music.stop(); } catch (Throwable e) { fail(e); }
     }
+  }
+
+  // ---------------- first start: the detail picker ----------------
+  // Shown once, on a fresh install, before the tile and sprite sheets load (only the font is in memory),
+  // so a slow phone never has to draw a Full frame to get to Options > Detail. A quick drawing test
+  // suggests a mode (its time is shown too, to tune the guesses from real phones).
+  boolean firstRun;
+  int pickSel, pickSuggested, pickMs;
+  static final String[] PICK_INFO = {
+    "Everything: pictures, snow, soft edges. Fast phones.",
+    "Plain sky, cached tiles. Most phones.",
+    "No animations, simplest drawing. Slow phones.",
+    "Hard edges, still title. The slowest phones." };
+
+  void pickSuggest() {
+    Image t = Image.createImage(64, 64);
+    Graphics g = t.getGraphics();
+    long t0 = System.currentTimeMillis();
+    for (int i = 0; i < 1500; i++)              // glyphs with soft edges, like tiles and sprites
+      g.drawRegion(Res.fontImg, (i & 15) * 8, (i % 6) * 9, 8, 9, 0, (i * 7) & 55, (i * 13) & 54, Graphics.TOP | Graphics.LEFT);
+    pickMs = (int) (System.currentTimeMillis() - t0);
+    pickSuggested = pickMs < 40 ? FULL : pickMs < 90 ? LOW : pickMs < 180 ? POTATO : MAXPOTATO;
+    pickSel = pickSuggested;
+  }
+
+  int pickRowY(int i) { return (landscape ? 44 : 64) + i * (landscape ? 40 : 50); }
+
+  void pickFrame(int ev) {
+    if ((ev & K_UP) != 0 && pickSel > 0) pickSel--;
+    if ((ev & K_DOWN) != 0 && pickSel < 3) pickSel++;
+    if ((ev & (K_SELECT | K_FIRE)) != 0) {
+      detail = pickSel;
+      Menu.noEffects = detail >= POTATO;
+      optionsMenu.setList(M_DETAIL, DETAIL_MODES, detail);
+      buildMainMenu();
+      saveSettings();
+      firstRun = false;
+      startGame();
+    }
+  }
+
+  int pickTouch(int type, int y) {
+    if (type != T_PRESS) return 0;
+    for (int i = 0; i < 4; i++) if (y >= pickRowY(i) - 4 && y < pickRowY(i) - 4 + (landscape ? 40 : 50)) {
+      if (pickSel == i) return K_SELECT | K_ANY;    // a tap on the chosen one starts the game
+      pickSel = i; return K_ANY;
+    }
+    return 0;
+  }
+
+  void drawPick(Graphics g) {
+    g.setColor(0x10183a); g.fillRect(0, 0, sw, sh);
+    Res.textCentered(g, Res.GOLD, "SuperTux 0.1.3", sw / 2, landscape ? 6 : 12, 1);
+    Res.textCentered(g, Res.WHITE, "Pick your detail", sw / 2, landscape ? 22 : 34, 1);
+    for (int i = 0; i < 4; i++) {
+      int y = pickRowY(i), h = landscape ? 36 : 46;
+      if (i == pickSel) { g.setColor(0x3c5a96); g.fillRect(4, y - 4, sw - 8, h); g.setColor(0x96c8ff); g.drawRect(4, y - 4, sw - 9, h - 1); }
+      String name = DETAIL_MODES[i] + (i == pickSuggested ? " (suggested)" : "");
+      Res.text(g, i == pickSel ? Res.GOLD : Res.WHITE, name, 12, y, 1);
+      String[] l = wrap(PICK_INFO[i], (sw - 24) / 8);
+      for (int k = 0; k < l.length && k < 2; k++) Res.text(g, Res.WHITE, l[k], 12, y + 12 + k * 10, 0);
+    }
+    int by = sh - (landscape ? 24 : 34);
+    Res.textCentered(g, Res.WHITE, "Change it later in Options", sw / 2, by, 1);
+    Res.textCentered(g, Res.BLUE, "test " + pickMs + " ms", sw / 2, by + 12, 0);
+  }
+
+  // ---------------- main loop ----------------
+  public void run() {
+    Graphics screen = getGraphics();
+    if (firstRun && !MAXPOTATO_ONLY) {   // the very first start: pick the detail before anything big loads
+      try { Res.fontImg = Image.createImage("/f.png"); pickSuggest(); state = PICK; }
+      catch (Throwable e) { startGame(); }
+    } else startGame();
     long last = System.currentTimeMillis();
     while (running) {
       long t0 = System.currentTimeMillis();
@@ -1952,6 +2024,7 @@ final class Game extends GameCanvas implements Runnable {
   }
 
   void frameStates(long dt, int ev) {
+    if (state == PICK) { pickFrame(ev); return; }
     if (state == NOTICE) { if (ev != 0 || System.currentTimeMillis() >= stateT) state = TITLE; return; }
     if (state == EDITOR) { now += dt; frameCounter = (int) (now / 25); editor.frame(dt, ev); return; }
     if (state == PLAY) {
@@ -2101,6 +2174,7 @@ final class Game extends GameCanvas implements Runnable {
   }
 
   void draw(Graphics g) {
+    if (state == PICK) { drawPick(g); return; }
     Res.tick++;
     Res.needSprites(state == WORLDMAP ? 1 : state == EDITOR ? 2 : 0);
     g.setClip(0, 0, sw, sh);
