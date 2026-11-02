@@ -28,7 +28,7 @@ Nokia E52 - Full speed with sound and music on.
 
 Sony Ericsson Aino - Full speed with music and sound on.
 
-Sony Ericsson TXT Pro - Laggy on Full detail. Use Low detail (the Lite Edition starts on it).
+Sony Ericsson TXT Pro - Laggy on Full detail. Use Low detail (Normal Low and Lite Low start on it).
 
 Samsung Wave 533 - 25 FPS on Low detail with sound and music off. Full detail with music and sound is laggy, 10+ FPS.
 
@@ -36,12 +36,13 @@ Samsung Wave 533 - 25 FPS on Low detail with sound and music off. Full detail wi
 Brutal rewrite of all of the code. Like, pretty much every line of code was adapted to Java... but the entire game is made to be as much of a 1:1 recreation as possible.
 
 # How to install?
-Pick the Edition that fits your phone. Every Edition installs as its own app (SuperTux F, N, L, M...), so you can keep several side by side, each with its own saves. JADs are there if your phone needs them.
+Pick the Edition that fits your phone. Every Edition installs as its own app (SuperTux F, N, L, M, NL, LL...), so you can keep several side by side, each with its own saves. JADs are there if your phone needs them.
 
 | Edition | File | For |
 |---|---|---|
 | Normal | SuperTux-Normal.jar | Most phones: everything in the game, MP3 music where the phone plays it |
 | Lite | SuperTux-Lite.jar | Phones with a 1 MB jar limit (Nokia S40 and others): MIDI music, all Detail modes |
+| Normal Low / Lite Low | SuperTux-Normal-Low.jar / SuperTux-Lite-Low.jar | Normal or Lite starting on Low detail, for slow phones (Sony Ericsson TXT Pro and such) |
 | Minimal | SuperTux-Minimal.jar | Phones with about 2 MB of Java memory (Nokia 6600 fold and others): Max Potato only, pictures loaded a piece at a time |
 | Full | SuperTux-Full.jar | Normal plus Adventure To The New World and I Wanna Be The SuperTux (separate ATTNW release) |
 | Full ATTNW | SuperTux-Full-ATTNW.jar | ATTNW's own lineup at full quality (separate ATTNW release) |
@@ -59,7 +60,7 @@ Options > Stretch for screens bigger than the game (WVGA, nHD and such): Off kee
 
 Keys set in Keyboard Setup (QWERTY letters and such) now work in the menus too.
 
-The Lite Edition starts on Low detail.
+Normal Low and Lite Low: the same as Normal and Lite, but starting on Low detail for slow phones. Each installs as its own app.
 
 # What's new in Release 1.3
 Editions: Full, Normal, Lite and Minimal (plus ATTNW versions of Full and Minimal), each installing as its own app.

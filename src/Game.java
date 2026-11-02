@@ -236,7 +236,7 @@ final class Game extends GameCanvas implements Runnable {
   void loadSettings() {
     wantLandscape = getWidth() > getHeight();
     if (PAGED) sounds.mode = Sound.NOKIA;     // weak phones: Nokia's own sound (tones where it's missing)
-    if (LITE) detail = LOW;                   // Lite Edition: old phones start on Low (Options > Detail)
+    if (LOW_START) detail = LOW;              // the Low jars (Lite Low, Normal Low): slow phones start on Low
     try { showTouch = hasPointerEvents(); } catch (Throwable e) { }
     try {
       byte[] b = WorldMap.read("stux");
@@ -280,7 +280,7 @@ final class Game extends GameCanvas implements Runnable {
   // the Max Potato jar for weak phones: no pictures but the hard-edged sprites, Detail fixed
   // the 2 MB jar (sprites in pages too; the lite jar has only its tiles in pages)
   static final boolean PAGED = Game.class.getResourceAsStream("/sp.bin") != null;
-  static final boolean LITE = Game.class.getResourceAsStream("/x/lite") != null;
+  static final boolean LOW_START = Game.class.getResourceAsStream("/x/low") != null;
   static final boolean MAXPOTATO_ONLY = Game.class.getResourceAsStream("/x/maxpotato") != null;
 
   // settings byte 2: 0 off, 1 normal (what older versions saved for off / on), 2 fast, 3 MIDI, 4 Nokia, 5 tones
