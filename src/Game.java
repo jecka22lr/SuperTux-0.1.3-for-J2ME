@@ -1657,7 +1657,9 @@ final class Game extends GameCanvas implements Runnable {
     if (state == PLAY && Menu.current == null && bound(code)) return keyBits(code) | K_ANY;   // * or # bound to an action
     if (code == KEY_STAR) return K_ESC | K_STAR | K_ANY;
     if (code == KEY_POUND) return K_ESC | K_POUND | K_ANY;
-    if (code == -8) return K_CLEAR | K_ANY;
+    // C / Backspace also pauses and backs out of menus: phones like the Nokia C6 have no softkeys in
+    // full screen (the slot menu still uses it to delete a slot, before Back is checked)
+    if (code == -8) return K_CLEAR | K_ESC | K_ANY;
     int b = navBits(code);
     if (b == 0) {
       int a = 0;
