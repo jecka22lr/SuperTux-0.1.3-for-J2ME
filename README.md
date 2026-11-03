@@ -16,9 +16,9 @@ LG t375 - 9-10 FPS on Landscape, 12 FPS on Portrait, 15 FPS with only Sound or M
 
 J2ME Loader, Android: 33FPS, stable (Locked to 32FPS)
 
-Sony Ericsson Vivaz - Full speed. (Was centered and small before Stretch.)
+Sony Ericsson Vivaz - Full speed. (Was centered and small: use the nHD Edition.)
 
-Samsung Omnia - Full speed. (Was centered and small before Stretch.)
+Samsung Omnia - Full speed. (Was centered and small: try the nHD Edition or Stretch.)
 
 Nokia E75 - Full speed with sound and music on.
 
@@ -36,12 +36,13 @@ Samsung Wave 533 - 25 FPS on Low detail with sound and music off. Full detail wi
 Brutal rewrite of all of the code. Like, pretty much every line of code was adapted to Java... but the entire game is made to be as much of a 1:1 recreation as possible.
 
 # How to install?
-Pick the Edition that fits your phone. Every Edition installs as its own app (SuperTux F, N, L, M...), so you can keep several side by side, each with its own saves. JADs are there if your phone needs them.
+Pick the Edition that fits your phone. Every Edition installs as its own app (SuperTux F, N, L, M, NH...), so you can keep several side by side, each with its own saves. JADs are there if your phone needs them.
 
 | Edition | File | For |
 |---|---|---|
 | Normal | SuperTux-Normal.jar | Most phones: everything in the game, MP3 music where the phone plays it |
 | Lite | SuperTux-Lite.jar | Phones with a 1 MB jar limit (Nokia S40 and others): MIDI music, all Detail modes |
+| Normal nHD / Full nHD / Full ATTNW nHD | SuperTux-Normal-nHD.jar ... | 640x360 touch phones (Nokia C6, 5800, N97, N8, Sony Ericsson Vivaz...): the phone itself scales the game to the whole screen in landscape, at full speed. Full nHD and Full ATTNW nHD are in the ATTNW release |
 | Minimal | SuperTux-Minimal.jar | Phones with about 2 MB of Java memory (Nokia 6600 fold and others): Max Potato only, pictures loaded a piece at a time |
 | Full | SuperTux-Full.jar | Normal plus Adventure To The New World and I Wanna Be The SuperTux (separate ATTNW release) |
 | Full ATTNW | SuperTux-Full-ATTNW.jar | ATTNW's own lineup at full quality (separate ATTNW release) |
@@ -58,6 +59,8 @@ On Symbian S60 platform phones with 369MHz CPUs, there are annoying lag spikes f
 Options > Stretch for screens bigger than the game (WVGA, nHD and such): Off keeps it at its size in the middle, Fit scales it up as far as it goes keeping its shape (the default), Fill covers the whole screen. Works sideways too, and taps land where you aim.
 
 Keys set in Keyboard Setup (QWERTY letters and such) now work in the menus too.
+
+nHD Editions for 640x360 touch phones: the phone's own Java scales the game to the full screen (landscape, Nokia's on-screen keypad hidden), so it runs at full speed. Options > Stretch stays for other big-screen phones, but it costs speed.
 
 The first time the game starts it asks which detail to use, before anything big loads, and suggests one from a quick drawing test. Options > Detail changes it later. (The Minimal Editions skip it: they're Max Potato only.)
 

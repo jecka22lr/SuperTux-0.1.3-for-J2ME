@@ -131,4 +131,19 @@ if [ -f dist/SuperTux-noattnw.jar ]; then
 else
   E SuperTux.jar SuperTux-Normal "SuperTux N" "$D, Normal Edition"   # built without the ATTNW mod
 fi
+# nHD jars for 640x360 touch phones (Nokia C6, 5800, N97, N8, Vivaz...): the phone's own Java scales
+# the game (declared 320x240, locked to landscape, stretched to 640x360, Nokia's on-screen keypad
+# hidden), which costs the game nothing, unlike Options > Stretch. Their own apps, next to the others.
+NHD="Nokia-MIDlet-Original-Display-Size: 320,240|Nokia-MIDlet-Target-Display-Size: 640,360|Nokia-MIDlet-App-Orientation: landscape|Nokia-MIDlet-On-Screen-Keypad: no"
+nhd() {   # <edition file> <new file> <MIDlet name> <description>
+  cp "dist/$1.jar" dist/nhd.jar
+  NEW=$2; MID=$3; DESC=$4
+  OLDIFS=$IFS; IFS='|'; set -- $NHD; IFS=$OLDIFS
+  E nhd.jar "$NEW" "$MID" "$DESC" "$@"
+}
+nhd SuperTux-Normal SuperTux-Normal-nHD "SuperTux NH" "$D, Normal Edition for 640x360 touch phones"
+if [ -f dist/SuperTux-Full.jar ]; then
+  nhd SuperTux-Full SuperTux-Full-nHD "SuperTux FH" "$D, Full Edition (with ATTNW) for 640x360 touch phones"
+  nhd SuperTux-Full-ATTNW SuperTux-Full-ATTNW-nHD "SuperTux ATTNW FH" "$A, Full Edition for 640x360 touch phones"
+fi
 ls -la dist

@@ -2,11 +2,13 @@
 """Turns the jars build.sh makes along the way into the released Editions: each gets its own file name
 and its own MIDlet name ("SuperTux F", "SuperTux N"...), so the Editions install next to each other on a
 phone instead of replacing one another (each keeps its own saves and settings).
-usage: edition.py <dist dir> <from.jar> <to name, e.g. SuperTux-Full> <MIDlet name> <description>
-Writes <to>.jar and <to>.jad and removes <from>.jar / .jad."""
+usage: edition.py <dist dir> <from.jar> <to name, e.g. SuperTux-Full> <MIDlet name> <description> [extra manifest lines]
+Writes <to>.jar and <to>.jad and removes <from>.jar / .jad. Extra lines ("Name: value") are added
+to the manifest and the jad (the nHD jars' Nokia scaling attributes)."""
 import sys, os, zipfile, zlib
 
 dist, src, dst, name, desc = sys.argv[1:6]
+extra = sys.argv[6:]
 src_jar = os.path.join(dist, src)
 z = zipfile.ZipFile(src_jar)
 entries = [(i, z.read(i.filename)) for i in z.infolist()]
@@ -36,7 +38,8 @@ def manifest(text):
         elif line.startswith('MIDlet-Name:'): line = 'MIDlet-Name: ' + name
         elif line.startswith('MIDlet-Description:'): line = 'MIDlet-Description: ' + desc
         out.append(line)
-    return out
+    while out and not out[-1].strip(): out.pop()
+    return out + extra + ['', '']
 
 mf = None
 dst_jar = os.path.join(dist, dst + '.jar')
