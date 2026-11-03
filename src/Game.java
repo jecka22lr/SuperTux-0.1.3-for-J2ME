@@ -2129,7 +2129,7 @@ final class Game extends GameCanvas implements Runnable {
 
   // Options > Stretch: the frame drawn at the game's size, then scaled (nearest pixel, turned too when
   // the game is sideways) onto the screen a row at a time; rows that repeat a source row reuse it
-  Image scaled; Graphics scaledG; int[] scSrc, scRow, scMapX, scMapY; int scKey, scDX, scDY, scDW, scDH;
+  Image scaled; Graphics scaledG; int[] scSrc, scRow, scMapX, scMapY, scBlock; int scKey, scDX, scDY, scDW, scDH;
   void scaleLayout(int W, int H) {
     int iw = rotate ? sh : sw, ih = rotate ? sw : sh;        // the picture as it appears on the screen
     int key = ((W * 4096 + H) * 4 + stretch) * 2 + (rotate ? 1 : 0) + sw * 31;
@@ -2160,16 +2160,20 @@ final class Game extends GameCanvas implements Runnable {
       if (scDX > 0) { screen.fillRect(0, 0, scDX, H); screen.fillRect(scDX + scDW, 0, W - scDX - scDW, H); }
     }
     int[] src = scSrc, row = scRow, mx = scMapX;
-    int last = -1;
-    for (int y = 0; y < scDH; y++) {
-      int sy = scMapY[y];
-      if (sy != last) {
-        last = sy;
-        if (!rotate) { int o = sy * bw; for (int x = 0; x < scDW; x++) row[x] = src[o + mx[x]]; }
-        // sideways (TRANS_ROT90): the screen's (X, Y) shows the frame's (Y, 239 - X)
-        else for (int x = 0; x < scDW; x++) row[x] = src[(239 - mx[x]) * bw + sy];
-      }
-      screen.drawRGB(row, 0, scDW, scDX, scDY + y, scDW, 1, false);
+    // each frame row is scaled once, copied (native arraycopy) for every screen row that repeats it,
+    // and drawn with one drawRGB: a few hundred calls a frame instead of one per screen row
+    int maxRep = (scDH + (rotate ? 320 : bh) - 1) / (rotate ? 320 : bh) + 1;
+    if (scBlock == null || scBlock.length < scDW * maxRep) scBlock = new int[scDW * maxRep];
+    int[] block = scBlock;
+    for (int y = 0; y < scDH; ) {
+      int sy = scMapY[y], n = 1;
+      while (y + n < scDH && scMapY[y + n] == sy && n < maxRep) n++;
+      if (!rotate) { int o = sy * bw; for (int x = 0; x < scDW; x++) row[x] = src[o + mx[x]]; }
+      // sideways (TRANS_ROT90): the screen's (X, Y) shows the frame's (Y, 239 - X)
+      else for (int x = 0; x < scDW; x++) row[x] = src[(239 - mx[x]) * bw + sy];
+      for (int k = 0; k < n; k++) System.arraycopy(row, 0, block, k * scDW, scDW);
+      screen.drawRGB(block, 0, scDW, scDX, scDY + y, scDW, n, false);
+      y += n;
     }
   }
 
