@@ -146,4 +146,13 @@ if [ -f dist/SuperTux-Full.jar ]; then
   nhd SuperTux-Full SuperTux-Full-nHD "SuperTux FH" "$D, Full Edition (with ATTNW) for 640x360 touch phones"
   nhd SuperTux-Full-ATTNW SuperTux-Full-ATTNW-nHD "SuperTux ATTNW FH" "$A, Full Edition for 640x360 touch phones"
 fi
+# ... and the same with Nokia's softkeys kept: the game is scaled to fit the screen keeping its shape
+# (no 640x360 target) and the phone keeps its softkey bar next to it, for phones or players that
+# want the softkeys (the nHD ones have none; C / Backspace or a tap opens the menu there).
+NHD="Nokia-MIDlet-Original-Display-Size: 320,240|Nokia-MIDlet-App-Orientation: landscape"
+nhd SuperTux-Normal SuperTux-Normal-nHD-Softkeys "SuperTux NHS" "$D, Normal Edition for 640x360 touch phones, with softkeys"
+if [ -f dist/SuperTux-Full.jar ]; then
+  nhd SuperTux-Full SuperTux-Full-nHD-Softkeys "SuperTux FHS" "$D, Full Edition (with ATTNW) for 640x360 touch phones, with softkeys"
+  nhd SuperTux-Full-ATTNW SuperTux-Full-ATTNW-nHD-Softkeys "SuperTux ATTNW FHS" "$A, Full Edition for 640x360 touch phones, with softkeys"
+fi
 ls -la dist

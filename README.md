@@ -43,6 +43,7 @@ Pick the Edition that fits your phone. Every Edition installs as its own app (Su
 | Normal | SuperTux-Normal.jar | Most phones: everything in the game, MP3 music where the phone plays it |
 | Lite | SuperTux-Lite.jar | Phones with a 1 MB jar limit (Nokia S40 and others): MIDI music, all Detail modes |
 | Normal nHD / Full nHD / Full ATTNW nHD | SuperTux-Normal-nHD.jar ... | 640x360 touch phones (Nokia C6, 5800, N97, N8, Sony Ericsson Vivaz...): the phone itself scales the game to the whole screen in landscape, at full speed. Full nHD and Full ATTNW nHD are in the ATTNW release |
+| Normal nHD Softkeys / Full nHD Softkeys / Full ATTNW nHD Softkeys | SuperTux-Normal-nHD-Softkeys.jar ... | The same phones with the softkeys kept: the game is scaled to fit in landscape keeping its shape, with the phone's softkey bar next to it. Full nHD Softkeys and Full ATTNW nHD Softkeys are in the ATTNW release |
 | Minimal | SuperTux-Minimal.jar | Phones with about 2 MB of Java memory (Nokia 6600 fold and others): Max Potato only, pictures loaded a piece at a time |
 | Full | SuperTux-Full.jar | Normal plus Adventure To The New World and I Wanna Be The SuperTux (separate ATTNW release) |
 | Full ATTNW | SuperTux-Full-ATTNW.jar | ATTNW's own lineup at full quality (separate ATTNW release) |
@@ -54,6 +55,11 @@ This has not yet been tested on enough of real firmware and as such I have no re
 # Issues
 Lite version of this game has very shitty MIDIs for the soundtrack. I might automate something to make them chiptune versions of the soundtrack. If you wanna make some human-made stuff I would much prefer that!
 On Symbian S60 platform phones with 369MHz CPUs, there are annoying lag spikes for every time a sound effect is played. This is not yet mitigated by different sound effect options except for OFF. This is a known issue unfortunately and allegedly some commercial J2ME games shipped without SFX for these.
+
+# Since Release 1.3.1
+C / Backspace opens the pause menu and backs out of menus, for phones with no softkeys in full screen like the Nokia C6 (it still deletes letters in text fields and a slot on the slot screen, and keeps its job if Keyboard Setup bound it).
+
+nHD Softkeys jars: the nHD jars with the phone's softkeys kept.
 
 # What's new in Release 1.3.1 (hotfix)
 Options > Stretch for screens bigger than the game (WVGA, nHD and such): Off keeps it at its size in the middle, Fit scales it up as far as it goes keeping its shape (the default), Fill covers the whole screen. Works sideways too, and taps land where you aim.
