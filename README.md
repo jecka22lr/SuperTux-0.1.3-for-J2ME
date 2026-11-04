@@ -58,40 +58,6 @@ This has not yet been tested on enough of real firmware and as such I have no re
 Lite version of this game has very shitty MIDIs for the soundtrack. I might automate something to make them chiptune versions of the soundtrack. If you wanna make some human-made stuff I would much prefer that!
 On Symbian S60 platform phones with 369MHz CPUs, there are annoying lag spikes for every time a sound effect is played. This is not yet mitigated by different sound effect options except for OFF. This is a known issue unfortunately and allegedly some commercial J2ME games shipped without SFX for these.
 
-# What's new in Release 1.4
-nHD Editions for 640x360 touch phones (Nokia C6, 5800, N97, N8, Vivaz...), Normal, Full and Full ATTNW: the phone's own Java scales the game to the full screen (landscape, Nokia's on-screen keypad hidden), so it runs at full speed. The nHD Softkeys versions keep the phone's softkey bar and scale the game to fit next to it, keeping its shape.
-
-C / Backspace opens the pause menu and backs out of menus, for phones with no softkeys in full screen like the Nokia C6 (it still deletes letters in text fields and a slot on the slot screen, and keeps its job if Keyboard Setup bound it).
-
-Options > Stretch is faster: each row of the picture is scaled once and drawn in one go.
-
-# What's new in Release 1.3.1 (hotfix)
-Options > Stretch for screens bigger than the game (WVGA, nHD and such): Off keeps it at its size in the middle, Fit scales it up as far as it goes keeping its shape (the default), Fill covers the whole screen. Works sideways too, and taps land where you aim.
-
-Keys set in Keyboard Setup (QWERTY letters and such) now work in the menus too.
-
-The first time the game starts it asks which detail to use, before anything big loads, and suggests one from a quick drawing test. Options > Detail changes it later. (The Minimal Editions skip it: they're Max Potato only.)
-
-# What's new in Release 1.3
-Editions: Full, Normal, Lite and Minimal (plus ATTNW versions of Full and Minimal), each installing as its own app.
-
-Minimal Edition for phones with about 2 MB of Java memory, like the Nokia 6600 fold: the tile and sprite sheets come in small pages and only the ones the level, world map or editor shows are kept; the pages for parts of a level already played are let go as you go (levels that scroll back keep theirs). The level editor works there too, and Options > Animations brings back animated tiles, bouncing bricks and coins, floating scores and the walking title at no extra memory. Show FPS adds a line with free memory and how much the pictures take.
-
-Lite Edition: tiles in pages as well; with RAM saver on only the level's are kept.
-
-ATTNW's crowded levels: bad guys only check bad guys near them for collisions, with the same results as before, so levels with hundreds of them run far faster on slow phones.
-
-Controls: separate key setups for Portrait and Landscape, landscape layout whenever the screen is wider than tall (no more black bars), the joystick read on its own so number keys don't move Tux, the last key the phone sent shown in Keyboard Setup, and Options > Toggle run.
-
-Audio: SFX volume and Music volume (25 to 100%), and a reworked Nokia sound mode (the only lag-free one on some Symbian phones).
-
-Physics: Tux moves in small steps, so slow phones jump as high and walk down stairs like fast ones; no more tiny hops at the end of a level on emulators that skip frames.
-
-Fixes: waterfall tiles, the Max Potato menu, the editor pointer reaching its buttons, and more. The high score name entry is out for now.
-
-# What's new in Beta Release 1.2
-Community levels made for 0.1.3 under Bonus Levels: Tux Strikes Back by Christian Schaefers (19 levels and its story) and four classic CT's Domain levels by CT. da'Bomb and UnNamed, from the SuperTux add-on collection.
-
 More options for slow phones:
 | Option | What it does |
 |---|---|
