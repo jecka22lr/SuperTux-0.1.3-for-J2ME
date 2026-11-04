@@ -26,6 +26,8 @@ Nokia E72 - Full speed with sound and music on.
 
 Nokia E52 - Full speed with sound and music on.
 
+Nokia C6-00 - My personal favorite, very comfortable experience. Full speed, everything on, RAM saver toggled on the 360x640 build. High framerates, albeit not entirely fullspeed, on ATTNW.
+
 Sony Ericsson Aino - Full speed with music and sound on.
 
 Sony Ericsson TXT Pro - Laggy on Full detail. Use Low detail.
