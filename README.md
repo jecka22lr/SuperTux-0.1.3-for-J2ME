@@ -58,17 +58,17 @@ This has not yet been tested on enough of real firmware and as such I have no re
 Lite version of this game has very shitty MIDIs for the soundtrack. I might automate something to make them chiptune versions of the soundtrack. If you wanna make some human-made stuff I would much prefer that!
 On Symbian S60 platform phones with 369MHz CPUs, there are annoying lag spikes for every time a sound effect is played. This is not yet mitigated by different sound effect options except for OFF. This is a known issue unfortunately and allegedly some commercial J2ME games shipped without SFX for these.
 
-# Since Release 1.3.1
+# What's new in Release 1.4
+nHD Editions for 640x360 touch phones (Nokia C6, 5800, N97, N8, Vivaz...), Normal, Full and Full ATTNW: the phone's own Java scales the game to the full screen (landscape, Nokia's on-screen keypad hidden), so it runs at full speed. The nHD Softkeys versions keep the phone's softkey bar and scale the game to fit next to it, keeping its shape.
+
 C / Backspace opens the pause menu and backs out of menus, for phones with no softkeys in full screen like the Nokia C6 (it still deletes letters in text fields and a slot on the slot screen, and keeps its job if Keyboard Setup bound it).
 
-nHD Softkeys jars: the nHD jars with the phone's softkeys kept.
+Options > Stretch is faster: each row of the picture is scaled once and drawn in one go.
 
 # What's new in Release 1.3.1 (hotfix)
 Options > Stretch for screens bigger than the game (WVGA, nHD and such): Off keeps it at its size in the middle, Fit scales it up as far as it goes keeping its shape (the default), Fill covers the whole screen. Works sideways too, and taps land where you aim.
 
 Keys set in Keyboard Setup (QWERTY letters and such) now work in the menus too.
-
-nHD Editions for 640x360 touch phones: the phone's own Java scales the game to the full screen (landscape, Nokia's on-screen keypad hidden), so it runs at full speed. Options > Stretch stays for other big-screen phones, but it costs speed.
 
 The first time the game starts it asks which detail to use, before anything big loads, and suggests one from a quick drawing test. Options > Detail changes it later. (The Minimal Editions skip it: they're Max Potato only.)
 

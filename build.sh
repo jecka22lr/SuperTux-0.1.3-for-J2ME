@@ -16,8 +16,8 @@ cat > build/MANIFEST.MF <<M
 MIDlet-1: SuperTux,/icon.png,SuperTux
 MIDlet-Name: SuperTux
 MIDlet-Vendor: SuperTux Devel Team, Jecka22LR
-MIDlet-Version: 1.3.1
-MIDlet-Description: SuperTux 0.1.3 J2ME - Release 1.3.1
+MIDlet-Version: 1.4.0
+MIDlet-Description: SuperTux 0.1.3 J2ME - Release 1.4
 MIDlet-Icon: /icon.png
 MicroEdition-Profile: MIDP-2.0
 MicroEdition-Configuration: CLDC-1.1
@@ -64,7 +64,7 @@ if [ "$SIZE" -ge 1000000 ]; then echo "lite jar is $SIZE bytes: over the 1 MB li
 # story backgrounds, the logo, the soft-edged sprite sheet), and Detail fixed at Max Potato
 mkdir -p build/mp && cd build/mp && unzip -q -o ../../dist/SuperTux-lite.jar && \
   rm -f b/*.png lo.png s.png && [ -f s2.png ] && echo maxpotato > x/maxpotato && \
-  sed 's/^MIDlet-Description: .*/MIDlet-Description: SuperTux 0.1.3 J2ME - Release 1.3.1, Max Potato for weak phones/' ../MANIFEST.MF > ../mp.mf && \
+  sed 's/^MIDlet-Description: .*/MIDlet-Description: SuperTux 0.1.3 J2ME - Release 1.4, Max Potato for weak phones/' ../MANIFEST.MF > ../mp.mf && \
   $J/bin/jar cfm ../../dist/SuperTux-MaxPotato.jar ../mp.mf $(ls | grep -v META-INF) 2>&1 | grep -v JAVA_TOOL_OPTIONS || true
 cd ../..
 python3 tools/repack.py dist/SuperTux-MaxPotato.jar
@@ -74,7 +74,7 @@ SIZE=$(stat -c %s dist/SuperTux-MaxPotato.jar)
 # small pages (tools/pages.py), so only what the level or the world map shows is in memory
 rm -rf build/mpl && cp -r build/mp build/mpl && rm -rf build/mpl/tp build/mpl/tp.bin && cp build/lite-t.png build/mpl/t.png && \
   python3 tools/pages.py build/mpl tiles sprites && \
-  sed 's/^MIDlet-Description: .*/MIDlet-Description: SuperTux 0.1.3 J2ME - Release 1.3.1, Max Potato for 2 MB phones/' build/MANIFEST.MF > build/mpl.mf && \
+  sed 's/^MIDlet-Description: .*/MIDlet-Description: SuperTux 0.1.3 J2ME - Release 1.4, Max Potato for 2 MB phones/' build/MANIFEST.MF > build/mpl.mf && \
   (cd build/mpl && $J/bin/jar cfm ../../dist/SuperTux-MaxPotato-2MB.jar ../mpl.mf $(ls | grep -v META-INF) 2>&1 | grep -v JAVA_TOOL_OPTIONS || true)
 python3 tools/repack.py dist/SuperTux-MaxPotato-2MB.jar
 SIZE=$(stat -c %s dist/SuperTux-MaxPotato-2MB.jar)
@@ -117,8 +117,8 @@ if [ -f res-atnw-only.txt ]; then
   { cat build/mpa.mf; echo "MIDlet-Jar-URL: SuperTux-ATTNW-MaxPotato-2MB.jar"; echo "MIDlet-Jar-Size: $SIZE"; } > dist/SuperTux-ATTNW-MaxPotato-2MB.jad
 fi
 # the Editions: own file and MIDlet names, so they install side by side (each with its own saves)
-D="SuperTux 0.1.3 J2ME - Release 1.3.1"
-A="Adventure To The New World (ATTNW) by Miksy91, on SuperTux 0.1.3 J2ME - Release 1.3.1"
+D="SuperTux 0.1.3 J2ME - Release 1.4"
+A="Adventure To The New World (ATTNW) by Miksy91, on SuperTux 0.1.3 J2ME - Release 1.4"
 E() { python3 tools/edition.py dist "$@"; }
 E SuperTux-lite.jar SuperTux-Lite "SuperTux L" "$D, Lite Edition (under 1 MB, MIDI)"
 E SuperTux-MaxPotato-2MB.jar SuperTux-Minimal "SuperTux M" "$D, Minimal Edition (Max Potato, 2 MB phones)"

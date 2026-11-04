@@ -127,7 +127,7 @@ final class Game extends GameCanvas implements Runnable {
   String[] startTitle, startSave, startIntro; int[] startMap; int curStart;
   String[] bonusTitle; int[] bonusMap;
   String titleNote;
-  static final String RELEASE = "Release 1.3.1";
+  static final String RELEASE = "Release 1.4";
   // Options > Music and Detail. Low: plain sky colour instead of the background picture, no snow or
   // clouds. Potato: also no tile animations (coins stand still), no flying scores, coins, brick
   // pieces or bouncing bricks, and no fades or menu slides: everything is there, with as little
